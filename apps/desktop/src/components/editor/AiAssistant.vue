@@ -1386,6 +1386,7 @@ const activeFullConfig = computed(() => {
 });
 
 function isModelCandidate(config: AiConfigItem): boolean {
+  if (settings.isEnterpriseAi) return config.id === "__enterprise_ai__" && !!settings.enterpriseAiState?.hasApiKey;
   return isAiConfigModelCandidate(config, getAiProviderPreset(config.provider, config.endpoint).requiresApiKey, supportsCliProviders);
 }
 
@@ -1422,9 +1423,10 @@ watch(skillCapabilityUnavailable, (unavailable) => {
 // reason rides on the trigger's label and title whenever the capability is gone.
 const skillSelectorTriggerLabel = computed(() => t(skillCapabilityUnavailable.value ? "ai.skillsUnsupportedForCliProvider" : "ai.skillsEntry"));
 
-function getModelsForConfig(configId: string) {
+function getModelsForConfig(configId: string): ReturnType<typeof aiModelOptions> {
   const config = settings.aiConfigs.find((item) => item.id === configId);
   if (!config) return [];
+  if (settings.enterpriseAiState) return settings.enterpriseAiState.models.map((id) => ({ id }));
   return aiModelOptions(config, modelCatalogs.get(configId)?.models ?? []);
 }
 
@@ -1461,6 +1463,7 @@ function toggleModelConfig(configId: string) {
 }
 
 async function loadConfiguredModelCatalogs(force = false) {
+  if (settings.isEnterpriseAi) return;
   const configs = settings.aiConfigs.filter(isModelCandidate);
   const queue = [...configs];
   const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
@@ -1485,6 +1488,7 @@ watch(providerSelectorOpen, (open) => {
 });
 
 async function ensureModelEffort(config: AiConfigItem, modelId: string, force = false) {
+  if (settings.isEnterpriseAi) return;
   try {
     const capability = await resolveEffort(config, modelId, force);
     syncEffortInputs(capability);
@@ -7280,11 +7284,11 @@ async function openExternalUrl(url: string) {
                           <span class="truncate" :title="getModelCatalog(config.id).error">{{ t("ai.modelLoadFailed") }}</span>
                           <button type="button" class="shrink-0 text-primary hover:underline" @click="loadModels(config, true)">{{ t("ai.retry") }}</button>
                         </div>
-                        <form v-if="manualModelConfigId === config.id" class="flex items-center gap-1 px-2 py-1" @submit.prevent="applyManualModel(config.id)">
+                        <form v-if="!settings.isEnterpriseAi && manualModelConfigId === config.id" class="flex items-center gap-1 px-2 py-1" @submit.prevent="applyManualModel(config.id)">
                           <input v-model="manualModelId" data-manual-model-input type="text" :placeholder="t('ai.manualModelPlaceholder')" class="min-w-0 flex-1 rounded-sm border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary" @click.stop />
                           <Button type="submit" size="sm" class="h-6 px-2 text-[10px]" :disabled="!manualModelId.trim()">{{ t("common.confirm") }}</Button>
                         </form>
-                        <button v-else type="button" class="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground" @click="startManualModel(config.id)">
+                        <button v-else-if="!settings.isEnterpriseAi" type="button" class="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground" @click="startManualModel(config.id)">
                           <Pencil class="h-3 w-3" />
                           {{ t("ai.manualModel") }}
                         </button>
@@ -7292,7 +7296,7 @@ async function openExternalUrl(url: string) {
                       <div v-if="configIndex < configuredProviders.length - 1" class="my-1 border-t" />
                     </div>
                   </div>
-                  <div v-if="settings.activeModel" class="border-t pt-1">
+                  <div v-if="settings.activeModel && !settings.isEnterpriseAi" class="border-t pt-1">
                     <Popover v-model:open="effortMenuOpen">
                       <PopoverAnchor as-child>
                         <button

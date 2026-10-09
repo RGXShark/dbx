@@ -561,6 +561,7 @@ mod tests {
 
     fn claude_code_config(model: &str) -> AiConfig {
         AiConfig {
+            deny_redirects: false,
             provider: AiProvider::ClaudeCodeCli,
             api_key: String::new(),
             auth_method: AiAuthMethod::Bearer,

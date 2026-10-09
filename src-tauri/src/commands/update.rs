@@ -357,6 +357,7 @@ pub async fn check_for_updates(
     locale: Option<String>,
     source: Option<dbx_core::DownloadSource>,
 ) -> Result<UpdateInfo, String> {
+    crate::enterprise_ai::ensure_app_updates_allowed()?;
     let locale = locale.unwrap_or_else(|| "zh-CN".to_string());
     let release = dbx_core::update::fetch_latest_release(&locale, source.unwrap_or_default()).await?;
     let current_version = env!("CARGO_PKG_VERSION");
@@ -450,6 +451,9 @@ pub fn get_downloaded_update(
     app: AppHandle,
     state: tauri::State<'_, PendingUpdateState>,
 ) -> Result<Option<DownloadedUpdate>, String> {
+    if crate::enterprise_ai::policy().is_some() {
+        return Ok(None);
+    }
     let mut pending = state.pending.lock().map_err(|_| "Update state is unavailable.")?;
     match pending.as_ref() {
         Some(PendingUpdate::Ready(cached)) => return Ok(Some(cached.record.info.clone())),
@@ -489,6 +493,7 @@ pub async fn download_update(
     attempt_id: String,
     release_notes: Option<String>,
 ) -> Result<DownloadedUpdate, String> {
+    crate::enterprise_ai::ensure_app_updates_allowed()?;
     let portable_mode = crate::data_dir::is_portable_mode();
     if requires_manual_update(IS_WINDOWS_7_TARGET) {
         return Err("Windows 7 builds must be updated with the dedicated Windows 7 offline installer.".to_string());
@@ -885,6 +890,7 @@ pub fn install_downloaded_update(
     cache_id: String,
     expected_version: String,
 ) -> Result<(), String> {
+    crate::enterprise_ai::ensure_app_updates_allowed()?;
     let cached = state.take_ready(&cache_id, &expected_version)?;
     // Read and reverify disk bytes immediately before installation; never trust memory alone.
     let refreshed = match restore_cached(&app) {

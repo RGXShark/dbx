@@ -457,6 +457,7 @@ mod tests {
 
     fn config(provider: AiProvider, model: &str) -> AiConfig {
         AiConfig {
+            deny_redirects: false,
             provider,
             api_key: String::new(),
             auth_method: AiAuthMethod::ApiKey,

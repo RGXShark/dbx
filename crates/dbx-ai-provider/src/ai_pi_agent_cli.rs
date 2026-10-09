@@ -852,6 +852,7 @@ mod tests {
 
     fn config() -> AiConfig {
         AiConfig {
+            deny_redirects: false,
             provider: AiProvider::PiAgentCli,
             api_key: String::new(),
             auth_method: AiAuthMethod::Bearer,

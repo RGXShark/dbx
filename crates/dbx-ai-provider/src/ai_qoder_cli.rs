@@ -520,6 +520,7 @@ mod tests {
 
     fn config(model: &str) -> AiConfig {
         AiConfig {
+            deny_redirects: false,
             provider: AiProvider::QoderCli,
             api_key: String::new(),
             auth_method: AiAuthMethod::Bearer,

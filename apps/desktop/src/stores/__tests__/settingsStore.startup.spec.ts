@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSettingsStore } from "../settingsStore";
 
 const backend = vi.hoisted(() => ({
+  getEnterpriseAiState: vi.fn().mockResolvedValue(null),
   loadAiConfigs: vi.fn(),
   loadAiChatSelection: vi.fn(),
   loadAiConfig: vi.fn(),
@@ -17,6 +18,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   localStorage.clear();
   setActivePinia(createPinia());
+  backend.getEnterpriseAiState.mockResolvedValue(null);
   backend.loadAiChatSelection.mockResolvedValue(null);
   backend.loadAiConfig.mockResolvedValue(null);
   backend.loadAiProviderConfigs.mockResolvedValue(null);
@@ -34,6 +36,7 @@ describe("AI startup initialization", () => {
     const store = useSettingsStore();
     const first = store.initAiConfigs();
     const second = store.initAiConfigs();
+    await Promise.resolve();
     expect(backend.loadAiConfigs).toHaveBeenCalledTimes(1);
     expect(store.isAiConfigLoaded).toBe(false);
     resolveConfigs([]);

@@ -2174,6 +2174,7 @@ describe("settingsStore activeModel lifecycle", () => {
 
   it("updateActiveModel persists the model and does not change any config isDefault", async () => {
     vi.doMock("@/lib/backend/api", () => ({
+      getEnterpriseAiState: vi.fn().mockResolvedValue(null),
       loadAiConfigs: vi.fn().mockResolvedValue([]),
       loadAiConfig: vi.fn().mockResolvedValue(null),
       loadAiProviderConfigs: vi.fn().mockResolvedValue(null),
@@ -2202,6 +2203,7 @@ describe("settingsStore activeModel lifecycle", () => {
     const setDefaultAiConfig = vi.fn().mockResolvedValue(undefined);
 
     vi.doMock("@/lib/backend/api", () => ({
+      getEnterpriseAiState: vi.fn().mockResolvedValue(null),
       loadAiConfigs: vi.fn().mockResolvedValue([]),
       loadAiConfig: vi.fn().mockResolvedValue(null),
       loadAiProviderConfigs: vi.fn().mockResolvedValue(null),
@@ -2232,6 +2234,7 @@ describe("settingsStore activeModel lifecycle", () => {
     const setDefaultAiConfig = vi.fn().mockRejectedValue(error);
 
     vi.doMock("@/lib/backend/api", () => ({
+      getEnterpriseAiState: vi.fn().mockResolvedValue(null),
       loadAiConfigs: vi.fn().mockResolvedValue([]),
       loadAiConfig: vi.fn().mockResolvedValue(null),
       loadAiProviderConfigs: vi.fn().mockResolvedValue(null),
@@ -2258,6 +2261,7 @@ describe("settingsStore activeModel lifecycle", () => {
 
   it("reloadAiConfigs sets activeModel to null when config list is empty", async () => {
     vi.doMock("@/lib/backend/api", () => ({
+      getEnterpriseAiState: vi.fn().mockResolvedValue(null),
       loadAiConfigs: vi.fn().mockResolvedValue([]),
       loadAiConfig: vi.fn().mockResolvedValue(null),
       loadAiProviderConfigs: vi.fn().mockResolvedValue(null),
@@ -2276,6 +2280,7 @@ describe("settingsStore activeModel lifecycle", () => {
     const configs = [makeTestConfig({ id: "c1", model: "model-a", isDefault: false }), makeTestConfig({ id: "c2", model: "model-b", isDefault: true }), makeTestConfig({ id: "c3", model: "model-c", isDefault: false })];
 
     vi.doMock("@/lib/backend/api", () => ({
+      getEnterpriseAiState: vi.fn().mockResolvedValue(null),
       loadAiConfigs: vi.fn().mockResolvedValue(configs),
       loadAiChatSelection: vi.fn().mockResolvedValue(null),
       saveAiChatSelection: vi.fn().mockResolvedValue(undefined),
@@ -2291,6 +2296,7 @@ describe("settingsStore activeModel lifecycle", () => {
   it("restores the locally persisted model and per-model effort independently of legacy config fields", async () => {
     const configs = [makeTestConfig({ id: "c1", model: "", isDefault: true })];
     vi.doMock("@/lib/backend/api", () => ({
+      getEnterpriseAiState: vi.fn().mockResolvedValue(null),
       loadAiConfigs: vi.fn().mockResolvedValue(configs),
       loadAiChatSelection: vi.fn().mockResolvedValue({
         version: 1,
@@ -2449,6 +2455,7 @@ describe("settingsStore activeModel lifecycle", () => {
 
   it("clears stale in-memory AI configs and selections when a reload returns no configs", async () => {
     vi.doMock("@/lib/backend/api", () => ({
+      getEnterpriseAiState: vi.fn().mockResolvedValue(null),
       loadAiConfigs: vi.fn().mockResolvedValue([]),
       loadAiConfig: vi.fn().mockResolvedValue(null),
       loadAiProviderConfigs: vi.fn().mockResolvedValue(null),
@@ -2479,6 +2486,7 @@ describe("settingsStore defaultAiMode lifecycle", () => {
 
   it("falls back to Ask when the saved chat selection has no defaultMode", async () => {
     vi.doMock("@/lib/backend/api", () => ({
+      getEnterpriseAiState: vi.fn().mockResolvedValue(null),
       loadAiConfigs: vi.fn().mockResolvedValue([]),
       loadAiConfig: vi.fn().mockResolvedValue(null),
       loadAiProviderConfigs: vi.fn().mockResolvedValue(null),
@@ -2496,6 +2504,7 @@ describe("settingsStore defaultAiMode lifecycle", () => {
 
   it("restores Agent from the saved chat selection", async () => {
     vi.doMock("@/lib/backend/api", () => ({
+      getEnterpriseAiState: vi.fn().mockResolvedValue(null),
       loadAiConfigs: vi.fn().mockResolvedValue([]),
       loadAiConfig: vi.fn().mockResolvedValue(null),
       loadAiProviderConfigs: vi.fn().mockResolvedValue(null),
@@ -2514,6 +2523,7 @@ describe("settingsStore defaultAiMode lifecycle", () => {
   it("restores and persists the last conversation preference", async () => {
     const saveAiChatSelection = vi.fn().mockResolvedValue(undefined);
     vi.doMock("@/lib/backend/api", () => ({
+      getEnterpriseAiState: vi.fn().mockResolvedValue(null),
       loadAiConfigs: vi.fn().mockResolvedValue([]),
       loadAiConfig: vi.fn().mockResolvedValue(null),
       loadAiProviderConfigs: vi.fn().mockResolvedValue(null),
@@ -2535,6 +2545,7 @@ describe("settingsStore defaultAiMode lifecycle", () => {
   it("setDefaultAiMode updates state and persists the mode", async () => {
     const saveAiChatSelection = vi.fn().mockResolvedValue(undefined);
     vi.doMock("@/lib/backend/api", () => ({
+      getEnterpriseAiState: vi.fn().mockResolvedValue(null),
       loadAiConfigs: vi.fn().mockResolvedValue([]),
       loadAiConfig: vi.fn().mockResolvedValue(null),
       loadAiProviderConfigs: vi.fn().mockResolvedValue(null),
@@ -2555,6 +2566,7 @@ describe("settingsStore defaultAiMode lifecycle", () => {
 
   it("falls back to disabled auto routing when the saved chat selection has none", async () => {
     vi.doMock("@/lib/backend/api", () => ({
+      getEnterpriseAiState: vi.fn().mockResolvedValue(null),
       loadAiConfigs: vi.fn().mockResolvedValue([]),
       loadAiConfig: vi.fn().mockResolvedValue(null),
       loadAiProviderConfigs: vi.fn().mockResolvedValue(null),
@@ -2573,6 +2585,7 @@ describe("settingsStore defaultAiMode lifecycle", () => {
   it("restores and persists the default auto-routing preference", async () => {
     const saveAiChatSelection = vi.fn().mockResolvedValue(undefined);
     vi.doMock("@/lib/backend/api", () => ({
+      getEnterpriseAiState: vi.fn().mockResolvedValue(null),
       loadAiConfigs: vi.fn().mockResolvedValue([]),
       loadAiConfig: vi.fn().mockResolvedValue(null),
       loadAiProviderConfigs: vi.fn().mockResolvedValue(null),

@@ -5,6 +5,7 @@ const saveAiChatSelection = vi.fn(async () => {});
 const loadAiChatSelection = vi.fn(async () => null);
 
 vi.mock("@/lib/backend/api", () => ({
+  getEnterpriseAiState: vi.fn().mockResolvedValue(null),
   loadAiConfigs: vi.fn(async () => []),
   loadAiChatSelection: () => loadAiChatSelection(),
   saveAiChatSelection: (selection: unknown) => saveAiChatSelection(selection),

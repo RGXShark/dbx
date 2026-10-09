@@ -125,3 +125,14 @@ export interface AiChatSelectionState {
   /** Prompt template ids from the most recent send, keyed by connection db_type. */
   lastUsedTemplatesByDbType?: Record<string, string[]>;
 }
+
+/** Desktop build policy. This response deliberately never includes the personal key. */
+export interface EnterpriseAiState {
+  schemaVersion: 1;
+  serviceName: string;
+  endpoint: string;
+  models: string[];
+  defaultModel: string;
+  selectedModel: string;
+  hasApiKey: boolean;
+}

@@ -10,7 +10,7 @@ pub async fn ai_test_connection(
     state: State<'_, Arc<AppState>>,
     config: AiConfig,
 ) -> Result<AiTestConnectionResult, String> {
-    let mut config = resolve_cli_provider_config(config);
+    let mut config = resolve_cli_provider_config(crate::enterprise_ai::apply(&state.storage, config).await?);
     merge_global_max_retries(
         &mut config,
         state.storage.load_max_retries().await.unwrap_or(dbx_core::ai::DEFAULT_MAX_RETRIES),
@@ -20,7 +20,10 @@ pub async fn ai_test_connection(
 
 #[tauri::command]
 pub async fn ai_list_models(state: State<'_, Arc<AppState>>, config: AiConfig) -> Result<Vec<AiModelInfo>, String> {
-    let mut config = resolve_cli_provider_config(config);
+    if let Some(models) = crate::enterprise_ai::models() {
+        return Ok(models);
+    }
+    let mut config = resolve_cli_provider_config(crate::enterprise_ai::apply(&state.storage, config).await?);
     merge_global_max_retries(
         &mut config,
         state.storage.load_max_retries().await.unwrap_or(dbx_core::ai::DEFAULT_MAX_RETRIES),
@@ -34,7 +37,11 @@ pub async fn ai_resolve_model_effort(
     config: AiConfig,
     model_id: String,
 ) -> Result<AiEffortCapability, String> {
-    let mut config = resolve_cli_provider_config(config);
+    if let Some(policy) = crate::enterprise_ai::policy() {
+        policy.validate_model(&model_id)?;
+        return Ok(AiEffortCapability::Unsupported);
+    }
+    let mut config = resolve_cli_provider_config(crate::enterprise_ai::apply(&state.storage, config).await?);
     merge_global_max_retries(
         &mut config,
         state.storage.load_max_retries().await.unwrap_or(dbx_core::ai::DEFAULT_MAX_RETRIES),
@@ -44,11 +51,15 @@ pub async fn ai_resolve_model_effort(
 
 #[tauri::command]
 pub async fn save_ai_config(state: State<'_, Arc<AppState>>, config: AiConfig) -> Result<(), String> {
+    crate::enterprise_ai::ensure_personal_mode()?;
     state.storage.save_ai_config(&config).await
 }
 
 #[tauri::command]
 pub async fn load_ai_config(state: State<'_, Arc<AppState>>) -> Result<Option<AiConfig>, String> {
+    if let Some(item) = crate::enterprise_ai::public_config(&state.storage).await? {
+        return Ok(Some(item.config));
+    }
     state.storage.load_ai_config().await
 }
 
@@ -58,6 +69,7 @@ pub async fn save_ai_provider_config(
     provider: String,
     config: AiConfig,
 ) -> Result<(), String> {
+    crate::enterprise_ai::ensure_personal_mode()?;
     let parsed_provider: AiProvider = serde_json::from_value(serde_json::Value::String(provider.clone()))
         .map_err(|_| format!("Invalid AI provider: {provider}"))?;
     let mut config = config;
@@ -69,6 +81,9 @@ pub async fn save_ai_provider_config(
 pub async fn load_ai_provider_configs(
     state: State<'_, Arc<AppState>>,
 ) -> Result<std::collections::HashMap<String, AiConfig>, String> {
+    if crate::enterprise_ai::policy().is_some() {
+        return Ok(std::collections::HashMap::new());
+    }
     state.storage.load_ai_provider_configs().await
 }
 
@@ -77,6 +92,15 @@ pub async fn save_ai_chat_selection(
     state: State<'_, Arc<AppState>>,
     selection: AiChatSelectionState,
 ) -> Result<(), String> {
+    if let Some(policy) = crate::enterprise_ai::policy() {
+        if let Some(active) = &selection.active {
+            if active.config_id != crate::enterprise_ai::CONFIG_ID {
+                return Err("ENTERPRISE_AI_CONFIG_LOCKED".into());
+            }
+            policy.validate_model(&active.model_id)?;
+        }
+    }
+
     state.storage.save_ai_chat_selection(&selection).await
 }
 
@@ -88,6 +112,7 @@ pub async fn load_ai_chat_selection(state: State<'_, Arc<AppState>>) -> Result<O
 #[tauri::command]
 pub async fn ai_complete(state: State<'_, Arc<AppState>>, request: AiCompletionRequest) -> Result<String, String> {
     let mut request = request;
+    request.config = crate::enterprise_ai::apply(&state.storage, request.config).await?;
     merge_global_max_retries(
         &mut request.config,
         state.storage.load_max_retries().await.unwrap_or(dbx_core::ai::DEFAULT_MAX_RETRIES),
@@ -103,6 +128,7 @@ pub async fn ai_stream(
     request: AiCompletionRequest,
 ) -> Result<(), String> {
     let mut request = request;
+    request.config = crate::enterprise_ai::apply(&state.storage, request.config).await?;
     merge_global_max_retries(
         &mut request.config,
         state.storage.load_max_retries().await.unwrap_or(dbx_core::ai::DEFAULT_MAX_RETRIES),
@@ -382,6 +408,8 @@ pub async fn ai_agent_stream(
     // agent loop appends the skill tools only then (ADR Decision 10).
     allow_skills: Option<bool>,
 ) -> Result<String, String> {
+    let mut request = request;
+    request.config = crate::enterprise_ai::apply(&state.storage, request.config).await?;
     let mut request = resolve_cli_provider_request(request);
     merge_global_max_retries(
         &mut request.config,
@@ -714,6 +742,7 @@ mod tests {
 
     fn test_ai_config(endpoint: &str, model: &str) -> AiConfig {
         AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Claude,
             api_key: "sk-test".to_string(),
             auth_method: AiAuthMethod::ApiKey,
@@ -876,4 +905,19 @@ mod tests {
         drop(app);
         let _ = std::fs::remove_dir_all(&dir);
     }
+}
+
+#[tauri::command]
+pub async fn get_enterprise_ai_state(
+    state: State<'_, Arc<AppState>>,
+) -> Result<Option<crate::enterprise_ai::EnterpriseAiState>, String> {
+    crate::enterprise_ai::state(&state.storage).await
+}
+#[tauri::command]
+pub async fn save_enterprise_ai_key(state: State<'_, Arc<AppState>>, api_key: String) -> Result<(), String> {
+    crate::enterprise_ai::save_key(&state.storage, &api_key).await
+}
+#[tauri::command]
+pub async fn save_enterprise_ai_model(state: State<'_, Arc<AppState>>, model: String) -> Result<(), String> {
+    crate::enterprise_ai::save_model(&state.storage, &model).await
 }

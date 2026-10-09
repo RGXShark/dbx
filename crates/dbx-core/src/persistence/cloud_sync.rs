@@ -3264,6 +3264,7 @@ mod tests {
             name: name.to_string(),
             is_default,
             config: AiConfig {
+                deny_redirects: false,
                 provider: crate::ai::AiProvider::Openai,
                 api_key: String::new(),
                 auth_method: AiAuthMethod::Bearer,

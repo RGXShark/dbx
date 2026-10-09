@@ -399,6 +399,9 @@ pub struct AiModelListItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiConfig {
+    /// Transport policy supplied by the desktop backend, never accepted over IPC.
+    #[serde(skip)]
+    pub deny_redirects: bool,
     pub provider: AiProvider,
     #[serde(default)]
     pub api_key: String,
@@ -1929,6 +1932,9 @@ fn ai_endpoint_is_loopback(config: &AiConfig) -> bool {
 
 pub fn build_ai_http_client(config: &AiConfig, timeout_secs: u64) -> Result<reqwest::Client, String> {
     let mut builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(timeout_secs));
+    if config.deny_redirects {
+        builder = builder.redirect(reqwest::redirect::Policy::none()).no_proxy();
+    }
     if config.skip_tls_verify {
         builder = builder.danger_accept_invalid_certs(true);
     }
@@ -5591,6 +5597,7 @@ mod tests {
     fn claude_http_test_request(endpoint: String) -> AiCompletionRequest {
         AiCompletionRequest {
             config: AiConfig {
+                deny_redirects: false,
                 provider: AiProvider::Claude,
                 api_key: "secret".to_string(),
                 auth_method: AiAuthMethod::ApiKey,
@@ -6264,6 +6271,7 @@ mod tests {
     #[test]
     fn ai_http_client_rejects_invalid_proxy_url() {
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Openai,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -6307,6 +6315,7 @@ mod tests {
     #[test]
     fn ai_http_client_accepts_proxy_host_port_without_scheme() {
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Openai,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -6365,6 +6374,7 @@ mod tests {
     #[test]
     fn ai_http_client_bypasses_proxy_for_loopback_endpoint() {
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::OpenaiCompatible,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -6406,6 +6416,7 @@ mod tests {
     #[test]
     fn resolves_gemini_and_ollama_endpoints() {
         let gemini = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Gemini,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::ApiKey,
@@ -6451,6 +6462,7 @@ mod tests {
         );
 
         let ollama = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Ollama,
             api_key: String::new(),
             auth_method: AiAuthMethod::Bearer,
@@ -6493,6 +6505,7 @@ mod tests {
     #[test]
     fn allows_empty_api_keys_only_for_self_hosted_providers() {
         let base = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::OpenaiCompatible,
             api_key: String::new(),
             auth_method: AiAuthMethod::Bearer,
@@ -6554,6 +6567,7 @@ mod tests {
     #[test]
     fn resolves_model_list_endpoints_from_base_and_completion_urls() {
         let openai = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Openai,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -6591,6 +6605,7 @@ mod tests {
         assert_eq!(resolve_model_list_endpoint(&openai).unwrap(), "https://api.openai.com/v1/models");
 
         let claude = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Claude,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::ApiKey,
@@ -6631,6 +6646,7 @@ mod tests {
     #[test]
     fn custom_anthropic_messages_style_uses_claude_endpoints() {
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Custom,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::ApiKey,
@@ -6738,6 +6754,7 @@ mod tests {
     #[test]
     fn minimax_provider_uses_openai_compatible_endpoints_and_round_trips() {
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::MiniMax,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -6826,6 +6843,7 @@ mod tests {
     fn auto_adds_v1_to_openai_compatible_endpoints() {
         // Endpoint without /v1 — auto add
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::OpenaiCompatible,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -6941,6 +6959,7 @@ mod tests {
     #[test]
     fn official_openai_endpoint_tracks_api_style() {
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Openai,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -6991,6 +7010,7 @@ mod tests {
     #[test]
     fn claude_headers_support_api_key_and_bearer_auth() {
         let mut config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Claude,
             api_key: " \tsecret\r\n".to_string(),
             auth_method: AiAuthMethod::ApiKey,
@@ -7163,6 +7183,7 @@ mod tests {
     #[test]
     fn resolves_ollama_native_show_endpoint_from_openai_compatibility_url() {
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Ollama,
             api_key: String::new(),
             auth_method: AiAuthMethod::Bearer,
@@ -7209,6 +7230,7 @@ mod tests {
         let (endpoint, server) =
             spawn_json_capture_server("application/json", r#"{"capabilities":["completion","tools"]}"#).await;
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Ollama,
             api_key: String::new(),
             auth_method: AiAuthMethod::Bearer,
@@ -7303,6 +7325,7 @@ mod tests {
         });
 
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Ollama,
             api_key: String::new(),
             auth_method: AiAuthMethod::Bearer,
@@ -7652,6 +7675,7 @@ mod tests {
     #[test]
     fn uses_max_completion_tokens_for_openai_reasoning_chat_completions() {
         let mut config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Openai,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -7885,6 +7909,7 @@ mod tests {
     #[test]
     fn omits_extra_body_for_kimi_model_aliases() {
         let mut config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::OpenaiCompatible,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -7938,6 +7963,7 @@ mod tests {
     #[test]
     fn omits_thinking_toggle_for_openai_requests() {
         let mut config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Openai,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -7994,6 +8020,7 @@ mod tests {
     #[test]
     fn keeps_extra_body_thinking_toggle_for_other_compatible_providers() {
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::OpenaiCompatible,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -8044,6 +8071,7 @@ mod tests {
     #[test]
     fn minimax_uses_native_thinking_toggle() {
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::MiniMax,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -8438,6 +8466,7 @@ mod tests {
     #[test]
     fn runtime_provider_default_suppresses_legacy_thinking_toggle() {
         let mut config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::OpenaiCompatible,
             api_key: "key".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -8515,6 +8544,7 @@ mod tests {
         });
 
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::OpenaiCompatible,
             api_key: "lm-studio".to_string(),
             auth_method: AiAuthMethod::Bearer,
@@ -8588,6 +8618,7 @@ mod tests {
     #[test]
     fn uses_reasoning_effort_to_disable_ollama_thinking() {
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Ollama,
             api_key: String::new(),
             auth_method: AiAuthMethod::Bearer,

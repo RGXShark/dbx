@@ -1,3 +1,4 @@
+import { enterpriseAiEn as enterpriseAi } from "./enterpriseAiMessages";
 import { redisGroupingEn as redisGrouping } from "./redisGrouping";
 import docs from "./docs/en";
 import { dataDictionaryEn as dataDictionary } from "./dataDictionaryMessages";
@@ -61,6 +62,7 @@ const consul = {
 };
 
 export default {
+  enterpriseAi,
   modelGeneration: {
     title: "Generate model",
     editTemplate: "Edit template",

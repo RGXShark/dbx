@@ -181,6 +181,7 @@ vi.mock("@/lib/backend/api", async (importOriginal) => {
       const result = aiAssistantMountApi.skillReadResult;
       return result ? Promise.resolve(result) : Promise.reject(new Error("readUserSkills not configured"));
     },
+    getEnterpriseAiState: vi.fn().mockResolvedValue(null),
     loadAiConfigs: empty,
     listPlugins: empty,
     loadPromptTemplates: empty,

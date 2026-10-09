@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
 import { isNewerRemoteVersion, resolveReleaseTagUrl, useAppUpdater } from "@/composables/useAppUpdater";
 const mocks = vi.hoisted(() => ({
+  enterprise: false,
+  getEnterpriseAiState: vi.fn(),
   checkForUpdates: vi.fn(),
   downloadUpdate: vi.fn(),
   cancelUpdateDownload: vi.fn(),
@@ -55,6 +57,7 @@ async function flush() {
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.getEnterpriseAiState.mockImplementation(async () => (mocks.enterprise ? { serviceName: "Company AI" } : null));
   settings.updateDownloadSource = "official";
   settings.ignoredUpdateVersion = "";
   settings.updateNotificationsEnabled = true;
@@ -89,6 +92,17 @@ describe("older version release pages", () => {
 });
 
 describe("silent update lifecycle", () => {
+  it("does not contact the official app update service in enterprise mode", async () => {
+    mocks.enterprise = true;
+    try {
+      const updater = mount();
+      await updater.checkUpdates();
+      expect(mocks.checkForUpdates).not.toHaveBeenCalled();
+      expect(updater.updateCheckMessage.value).toContain("IT");
+    } finally {
+      mocks.enterprise = false;
+    }
+  });
   it("checks and shows a badge without downloading when automatic downloads are disabled", async () => {
     settings.autoUpdateApp = false;
     const updater = mount();

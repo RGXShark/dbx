@@ -5534,3 +5534,14 @@ export async function deletePluginUiStorage(_pluginId: string, _key: string): Pr
 export async function openQueryResultTempFile(_path: string): Promise<void> {
   throw new Error("Opening query results requires the desktop app");
 }
+
+// Enterprise policy is embedded in desktop binaries only.
+export async function getEnterpriseAiState(): Promise<import("@/types/ai").EnterpriseAiState | null> {
+  return null;
+}
+export async function saveEnterpriseAiKey(_apiKey: string): Promise<void> {
+  throw new Error("Desktop enterprise mode is not enabled");
+}
+export async function saveEnterpriseAiModel(_model: string): Promise<void> {
+  throw new Error("Desktop enterprise mode is not enabled");
+}

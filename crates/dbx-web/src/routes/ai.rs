@@ -582,6 +582,7 @@ mod tests {
 
     fn make_config(provider: AiProvider) -> AiConfig {
         AiConfig {
+            deny_redirects: false,
             provider,
             api_key: String::new(),
             auth_method: AiAuthMethod::Bearer,
@@ -691,6 +692,7 @@ mod tests {
         });
 
         let config = AiConfig {
+            deny_redirects: false,
             provider: AiProvider::Claude,
             api_key: "sk-test".to_string(),
             auth_method: AiAuthMethod::ApiKey,

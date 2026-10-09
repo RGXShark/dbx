@@ -46,6 +46,7 @@ vi.mock("@/lib/backend/api", async (importOriginal) => {
     saveAiConversation: () => Promise.resolve(),
     listUserSkills: () => Promise.resolve(catalog),
     readUserSkills: empty,
+    getEnterpriseAiState: vi.fn().mockResolvedValue(null),
     loadAiConfigs: empty,
     listPlugins: empty,
     loadPromptTemplates: empty,

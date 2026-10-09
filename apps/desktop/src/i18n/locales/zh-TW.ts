@@ -1,3 +1,4 @@
+import { enterpriseAiZhTw as enterpriseAi } from "./enterpriseAiMessages";
 import { redisGroupingZhTW as redisGrouping } from "./redisGrouping";
 import { withEnglishFallback } from "./fallback";
 import { mongodbDatabaseDumpZhTW as mongoDump } from "./mongodbDatabaseDump";
@@ -63,6 +64,7 @@ const consul = {
 };
 
 export default withEnglishFallback({
+  enterpriseAi,
   modelGeneration: {
     title: "產生模型",
     editTemplate: "編輯範本",

@@ -1172,3 +1172,7 @@ export const mqttListSavedTopicConfigs = forward("mqttListSavedTopicConfigs");
 export const mqttGetTopicTree = forward("mqttGetTopicTree");
 export const mqttGetMessages = forward("mqttGetMessages");
 export const mqttClearMessages = forward("mqttClearMessages");
+
+export const getEnterpriseAiState = forward("getEnterpriseAiState");
+export const saveEnterpriseAiKey = forward("saveEnterpriseAiKey");
+export const saveEnterpriseAiModel = forward("saveEnterpriseAiModel");

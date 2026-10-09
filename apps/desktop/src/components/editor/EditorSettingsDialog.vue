@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import EnterpriseAiSettings from "@/components/ai/EnterpriseAiSettings.vue";
 import { cleanupMcpHistoryRetention, loadMcpHistoryRetentionLimit, saveMcpHistoryRetentionLimit } from "@/lib/backend/api";
 import { HISTORY_RETENTION_LIMITS, useHistoryRetentionSetting } from "@/composables/useHistoryRetentionSetting";
 import { ref, watch, shallowRef, computed, onMounted, onUnmounted, nextTick } from "vue";
@@ -10101,723 +10102,728 @@ LIMIT 100;</pre
 
             <!-- AI Settings Tab -->
             <section v-else-if="activeSettingsTab === 'ai'" data-settings-search-id="ai" :class="['flex flex-col gap-5 py-2', settingsSearchTargetClass('ai')]">
-              <!-- Config List View -->
-              <div v-if="aiConfigListMode === 'list'" class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <h3 class="text-sm font-medium">{{ t("ai.configList") }}</h3>
-                  <Button type="button" size="sm" @click="aiEnterEditMode()">
-                    <Plus class="mr-1 h-3.5 w-3.5" />
-                    {{ t("ai.addConfig") }}
-                  </Button>
-                </div>
-
-                <div v-if="settingsStore.aiConfigs.length === 0" class="rounded-md border border-dashed p-6 text-center">
-                  <p class="text-sm text-muted-foreground">
-                    {{ t("ai.noAiConfigs") }}
-                  </p>
-                  <Button type="button" size="sm" class="mt-2" @click="aiEnterEditMode()">
-                    <Plus class="mr-1 h-3.5 w-3.5" />
-                    {{ t("ai.addConfig") }}
-                  </Button>
-                </div>
-
-                <div v-else class="space-y-2">
-                  <div v-for="config in displayedAiConfigs" :key="config.id" class="flex items-center justify-between rounded-md border p-3" :class="{ 'border-primary bg-primary/5': config.isDefault }">
-                    <div class="flex items-center gap-3">
-                      <AiProviderLogo :provider="config.provider" :label="getAiProviderPreset(config.provider, config.endpoint).label" :icon-slug="getAiProviderPreset(config.provider, config.endpoint).iconSlug" :icon-path="getAiProviderPreset(config.provider, config.endpoint).iconPath" />
-                      <div>
-                        <div class="flex items-center gap-2">
-                          <span class="text-sm font-medium">{{ config.name }}</span>
-                          <Badge v-if="config.isDefault" variant="default" class="h-5 text-[10px]">
-                            {{ t("ai.default") }}
-                          </Badge>
-                        </div>
-                        <div class="text-xs text-muted-foreground">
-                          {{ getAiProviderPreset(config.provider, config.endpoint).label }}
-                        </div>
-                      </div>
-                    </div>
-                    <div class="flex items-center gap-1">
-                      <Button v-if="!config.isDefault" type="button" size="sm" variant="ghost" @click="aiSetDefaultConfig(config.id)">
-                        {{ t("ai.setDefault") }}
-                      </Button>
-                      <Button type="button" size="sm" variant="ghost" @click="aiEnterEditMode(config.id)">
-                        {{ t("common.edit") }}
-                      </Button>
-                      <Button type="button" size="sm" variant="ghost" class="text-destructive" @click="aiDeleteConfig(config.id)">
-                        {{ t("common.delete") }}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="aiConfigListMode === 'list'" data-settings-search-id="ai-typography" class="space-y-3">
-                <Separator />
-                <div class="settings-item space-y-3 rounded-md border bg-muted/20 px-3 py-2">
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="space-y-1">
-                      <h3 class="text-sm font-medium">{{ t("ai.conversationTypography") }}</h3>
-                      <p class="text-xs text-muted-foreground">{{ t("ai.conversationTypographyDescription") }}</p>
-                    </div>
-                    <Button type="button" size="sm" variant="ghost" class="h-7 shrink-0 gap-1 px-2 text-xs" :disabled="aiTypographySaving || (editAiFontFamily === AI_CONVERSATION_FONT_FAMILY_DEFAULT && Number(editAiFontSize) === AI_CONVERSATION_FONT_SIZE_DEFAULT)" @click="resetAiTypography">
-                      <RotateCcw class="h-3.5 w-3.5" />
-                      {{ t("settings.reset") }}
+              <p v-if="!settingsStore.aiPolicyReady" role="status" class="text-sm text-muted-foreground">{{ t(settingsStore.enterpriseAiLoadFailed ? "enterpriseAi.loadFailed" : "enterpriseAi.loading") }}</p>
+              <EnterpriseAiSettings v-else-if="settingsStore.isEnterpriseAi" />
+              <template v-else>
+                <!-- Config List View -->
+                <div v-if="aiConfigListMode === 'list'" class="space-y-4">
+                  <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-medium">{{ t("ai.configList") }}</h3>
+                    <Button type="button" size="sm" @click="aiEnterEditMode()">
+                      <Plus class="mr-1 h-3.5 w-3.5" />
+                      {{ t("ai.addConfig") }}
                     </Button>
                   </div>
-                  <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
-                    <div class="min-w-0 space-y-1.5">
-                      <Label>{{ t("ai.conversationFontFamily") }}</Label>
-                      <SearchableSelect
-                        :model-value="editAiFontFamily"
-                        :options="aiFontOptions"
-                        :placeholder="t('ai.conversationFontFollowInterface')"
-                        :search-placeholder="t('settings.searchFont')"
-                        :empty-text="t('settings.noFontsFound')"
-                        :loading-text="t('settings.loadingFonts')"
-                        :disabled="aiTypographySaving"
-                        allow-custom
-                        clearable
-                        :display-name="displayAiFontFamily"
-                        :normalize-custom="normalizeAiConversationFontFamilyInput"
-                        :trigger-class="appearanceFontSearchTriggerClass"
-                        :trigger-icon-class="appearanceFontSearchTriggerIconClass"
-                        content-class="w-[var(--reka-popover-trigger-width)] min-w-[260px]"
-                        @update:model-value="onAiFontFamilyChange"
-                        @update:open="(open: boolean) => open && loadSystemFontOptions()"
-                      >
-                        <template #trigger-label="{ label, loading }">
-                          <span class="truncate" :style="editAiFontFamily ? { fontFamily: editAiFontFamily } : undefined">
-                            {{ loading ? t("settings.loadingFonts") : label }}
-                          </span>
-                        </template>
-                        <template #option-label="{ option, label }">
-                          <span class="truncate" :style="fontOptionStyle(option, editAiFontFamily)">{{ label }}</span>
-                        </template>
-                        <template #custom-option-label="{ value }">
-                          <span class="truncate" :style="{ fontFamily: value }">
-                            {{ t("settings.useCustomFont", { font: readableFontFamily(value) }) }}
-                          </span>
-                        </template>
-                      </SearchableSelect>
+
+                  <div v-if="settingsStore.aiConfigs.length === 0" class="rounded-md border border-dashed p-6 text-center">
+                    <p class="text-sm text-muted-foreground">
+                      {{ t("ai.noAiConfigs") }}
+                    </p>
+                    <Button type="button" size="sm" class="mt-2" @click="aiEnterEditMode()">
+                      <Plus class="mr-1 h-3.5 w-3.5" />
+                      {{ t("ai.addConfig") }}
+                    </Button>
+                  </div>
+
+                  <div v-else class="space-y-2">
+                    <div v-for="config in displayedAiConfigs" :key="config.id" class="flex items-center justify-between rounded-md border p-3" :class="{ 'border-primary bg-primary/5': config.isDefault }">
+                      <div class="flex items-center gap-3">
+                        <AiProviderLogo :provider="config.provider" :label="getAiProviderPreset(config.provider, config.endpoint).label" :icon-slug="getAiProviderPreset(config.provider, config.endpoint).iconSlug" :icon-path="getAiProviderPreset(config.provider, config.endpoint).iconPath" />
+                        <div>
+                          <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium">{{ config.name }}</span>
+                            <Badge v-if="config.isDefault" variant="default" class="h-5 text-[10px]">
+                              {{ t("ai.default") }}
+                            </Badge>
+                          </div>
+                          <div class="text-xs text-muted-foreground">
+                            {{ getAiProviderPreset(config.provider, config.endpoint).label }}
+                          </div>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <Button v-if="!config.isDefault" type="button" size="sm" variant="ghost" @click="aiSetDefaultConfig(config.id)">
+                          {{ t("ai.setDefault") }}
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" @click="aiEnterEditMode(config.id)">
+                          {{ t("common.edit") }}
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" class="text-destructive" @click="aiDeleteConfig(config.id)">
+                          {{ t("common.delete") }}
+                        </Button>
+                      </div>
                     </div>
-                    <div class="space-y-1.5">
-                      <Label for="ai-conversation-font-size">{{ t("ai.conversationFontSize") }}</Label>
-                      <div class="flex items-center gap-2">
-                        <Input
-                          id="ai-conversation-font-size"
-                          v-model.number="editAiFontSize"
-                          type="number"
-                          :min="AI_CONVERSATION_FONT_SIZE_MIN"
-                          :max="AI_CONVERSATION_FONT_SIZE_MAX"
-                          step="1"
-                          class="h-8 text-xs"
+                  </div>
+                </div>
+
+                <div v-if="aiConfigListMode === 'list'" data-settings-search-id="ai-typography" class="space-y-3">
+                  <Separator />
+                  <div class="settings-item space-y-3 rounded-md border bg-muted/20 px-3 py-2">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="space-y-1">
+                        <h3 class="text-sm font-medium">{{ t("ai.conversationTypography") }}</h3>
+                        <p class="text-xs text-muted-foreground">{{ t("ai.conversationTypographyDescription") }}</p>
+                      </div>
+                      <Button type="button" size="sm" variant="ghost" class="h-7 shrink-0 gap-1 px-2 text-xs" :disabled="aiTypographySaving || (editAiFontFamily === AI_CONVERSATION_FONT_FAMILY_DEFAULT && Number(editAiFontSize) === AI_CONVERSATION_FONT_SIZE_DEFAULT)" @click="resetAiTypography">
+                        <RotateCcw class="h-3.5 w-3.5" />
+                        {{ t("settings.reset") }}
+                      </Button>
+                    </div>
+                    <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
+                      <div class="min-w-0 space-y-1.5">
+                        <Label>{{ t("ai.conversationFontFamily") }}</Label>
+                        <SearchableSelect
+                          :model-value="editAiFontFamily"
+                          :options="aiFontOptions"
+                          :placeholder="t('ai.conversationFontFollowInterface')"
+                          :search-placeholder="t('settings.searchFont')"
+                          :empty-text="t('settings.noFontsFound')"
+                          :loading-text="t('settings.loadingFonts')"
                           :disabled="aiTypographySaving"
-                          @change="commitAiFontSize"
-                          @keydown.enter="blurAiFontSizeInput"
-                        />
-                        <span class="text-xs text-muted-foreground">px</span>
+                          allow-custom
+                          clearable
+                          :display-name="displayAiFontFamily"
+                          :normalize-custom="normalizeAiConversationFontFamilyInput"
+                          :trigger-class="appearanceFontSearchTriggerClass"
+                          :trigger-icon-class="appearanceFontSearchTriggerIconClass"
+                          content-class="w-[var(--reka-popover-trigger-width)] min-w-[260px]"
+                          @update:model-value="onAiFontFamilyChange"
+                          @update:open="(open: boolean) => open && loadSystemFontOptions()"
+                        >
+                          <template #trigger-label="{ label, loading }">
+                            <span class="truncate" :style="editAiFontFamily ? { fontFamily: editAiFontFamily } : undefined">
+                              {{ loading ? t("settings.loadingFonts") : label }}
+                            </span>
+                          </template>
+                          <template #option-label="{ option, label }">
+                            <span class="truncate" :style="fontOptionStyle(option, editAiFontFamily)">{{ label }}</span>
+                          </template>
+                          <template #custom-option-label="{ value }">
+                            <span class="truncate" :style="{ fontFamily: value }">
+                              {{ t("settings.useCustomFont", { font: readableFontFamily(value) }) }}
+                            </span>
+                          </template>
+                        </SearchableSelect>
                       </div>
-                      <p class="text-[11px] text-muted-foreground">
-                        {{ t("ai.conversationFontSizeRange", { min: AI_CONVERSATION_FONT_SIZE_MIN, max: AI_CONVERSATION_FONT_SIZE_MAX }) }}
-                      </p>
+                      <div class="space-y-1.5">
+                        <Label for="ai-conversation-font-size">{{ t("ai.conversationFontSize") }}</Label>
+                        <div class="flex items-center gap-2">
+                          <Input
+                            id="ai-conversation-font-size"
+                            v-model.number="editAiFontSize"
+                            type="number"
+                            :min="AI_CONVERSATION_FONT_SIZE_MIN"
+                            :max="AI_CONVERSATION_FONT_SIZE_MAX"
+                            step="1"
+                            class="h-8 text-xs"
+                            :disabled="aiTypographySaving"
+                            @change="commitAiFontSize"
+                            @keydown.enter="blurAiFontSizeInput"
+                          />
+                          <span class="text-xs text-muted-foreground">px</span>
+                        </div>
+                        <p class="text-[11px] text-muted-foreground">
+                          {{ t("ai.conversationFontSizeRange", { min: AI_CONVERSATION_FONT_SIZE_MIN, max: AI_CONVERSATION_FONT_SIZE_MAX }) }}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <!-- Agent Turn Limit (list mode, global) -->
-              <div v-if="aiConfigListMode === 'list'" class="space-y-3">
-                <Separator />
-                <div>
-                  <h3 class="text-sm font-medium">
-                    {{ t("ai.maxAgentTurns") }}
-                  </h3>
-                  <p class="text-xs text-muted-foreground">
-                    {{ t("ai.maxAgentTurnsDescription") }}
-                  </p>
-                </div>
-                <div class="flex items-center gap-2">
-                  <Input v-model.number="editMaxAgentTurns" type="number" :min="MAX_AGENT_TURNS_MIN" :max="MAX_AGENT_TURNS_MAX" step="1" class="h-8 w-32 text-xs" :placeholder="String(MAX_AGENT_TURNS_DEFAULT)" :disabled="!maxAgentTurnsLoaded || maxAgentTurnsSaving" />
-                  <span class="text-xs" :class="maxAgentTurnsOutOfRange(editMaxAgentTurns) ? 'text-destructive' : 'text-muted-foreground'">
-                    {{
-                      t("ai.maxAgentTurnsRange", {
-                        min: MAX_AGENT_TURNS_MIN,
-                        max: MAX_AGENT_TURNS_MAX,
-                        default: MAX_AGENT_TURNS_DEFAULT,
-                      })
-                    }}
-                  </span>
-                  <div class="flex-1"></div>
-                  <Button v-if="maxAgentTurnsLoadError" type="button" size="sm" variant="outline" :disabled="maxAgentTurnsLoading" @click="loadMaxAgentTurnsSetting">
-                    {{ t("common.retry") }}
-                  </Button>
-                  <Button type="button" size="sm" :disabled="!maxAgentTurnsLoaded || maxAgentTurnsSaving || maxAgentTurnsOutOfRange(editMaxAgentTurns)" @click="saveMaxAgentTurnsSetting">
-                    {{ maxAgentTurnsSaving ? t("common.processing") : t("common.save") }}
-                  </Button>
-                </div>
-              </div>
-
-              <!-- Default AI Mode (list mode, global) -->
-              <div v-if="aiConfigListMode === 'list'" class="space-y-3">
-                <Separator />
-                <div>
-                  <h3 class="text-sm font-medium">
-                    {{ t("ai.defaultAiMode") }}
-                  </h3>
-                  <p class="text-xs text-muted-foreground">
-                    {{ t("ai.defaultAiModeDescription") }}
-                  </p>
-                </div>
-                <div class="flex items-center gap-2">
-                  <div class="flex items-center gap-1 rounded-md border p-0.5">
-                    <button type="button" class="rounded-sm px-2.5 py-1 text-xs" :class="settingsStore.defaultAiMode === 'ask' ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'" @click="settingsStore.setDefaultAiMode('ask')">
-                      {{ t("ai.modes.ask") }}
-                    </button>
-                    <button type="button" class="rounded-sm px-2.5 py-1 text-xs" :class="settingsStore.defaultAiMode === 'agent' ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'" @click="settingsStore.setDefaultAiMode('agent')">
-                      {{ t("ai.modes.agent") }}
-                    </button>
-                  </div>
-                  <div class="flex-1"></div>
-                </div>
-              </div>
-
-              <!-- Default auto intent routing (list mode, global) -->
-              <div v-if="aiConfigListMode === 'list'" class="space-y-3">
-                <Separator />
-                <div class="settings-item flex items-center justify-between gap-4 rounded-md border bg-muted/20 px-3 py-2">
-                  <div class="space-y-1">
-                    <Label for="ai-default-auto-routing">
-                      {{ t("ai.defaultAutoRouting") }}
-                    </Label>
-                    <p class="text-xs text-muted-foreground">
-                      {{ t("ai.defaultAutoRoutingDescription") }}
-                    </p>
-                  </div>
-                  <Switch id="ai-default-auto-routing" :model-value="settingsStore.defaultAutoRouting" @update:model-value="(value) => settingsStore.setDefaultAutoRouting(Boolean(value))" />
-                </div>
-              </div>
-
-              <!-- Restore last AI conversation (list mode, global) -->
-              <div v-if="aiConfigListMode === 'list'" class="space-y-3">
-                <Separator />
-                <div class="settings-item flex items-center justify-between gap-4 rounded-md border bg-muted/20 px-3 py-2">
-                  <div class="space-y-1">
-                    <Label for="ai-restore-last-conversation">
-                      {{ t("ai.restoreLastConversation") }}
-                    </Label>
-                    <p class="text-xs text-muted-foreground">
-                      {{ t("ai.restoreLastConversationDescription") }}
-                    </p>
-                  </div>
-                  <Switch id="ai-restore-last-conversation" :model-value="settingsStore.restoreLastConversation" @update:model-value="(value) => settingsStore.setRestoreLastConversation(Boolean(value))" />
-                </div>
-              </div>
-
-              <!-- Custom skill directory (list mode, global, desktop-only) -->
-              <div v-if="aiConfigListMode === 'list' && !isWeb" class="space-y-3">
-                <Separator />
-                <div class="settings-item space-y-2 rounded-md border bg-muted/20 px-3 py-2">
-                  <div class="flex items-center justify-between gap-4">
-                    <div class="space-y-1">
-                      <Label for="ai-custom-skill-root">{{ t("settings.aiSkillRoot") }}</Label>
-                      <p class="text-xs text-muted-foreground">{{ t("settings.aiSkillRootDesc") }}</p>
-                    </div>
-                    <Switch id="ai-custom-skill-root" :model-value="settingsStore.desktopSettings.custom_ai_skill_root_enabled === true" @update:model-value="(value) => settingsStore.updateDesktopSettings({ custom_ai_skill_root_enabled: Boolean(value) })" />
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <Input v-model="customSkillRootDraft" :placeholder="t('settings.aiSkillRootPath')" :disabled="settingsStore.desktopSettings.custom_ai_skill_root_enabled !== true" class="h-8 flex-1 font-mono text-xs" @blur="commitCustomSkillRoot" @keydown.enter="commitCustomSkillRoot" />
-                    <Button variant="outline" size="sm" class="h-8 shrink-0 px-2" :disabled="settingsStore.desktopSettings.custom_ai_skill_root_enabled !== true" :aria-label="t('settings.aiSkillRootBrowse')" @click="pickCustomSkillRoot">
-                      <FolderOpen class="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-                <!-- Default off: a skill listing rides in every request once this is
-                     on, even with nothing selected (prd 09-30 Req 5). -->
-                <div class="settings-item flex items-center justify-between gap-4 rounded-md border bg-muted/20 px-3 py-2">
-                  <div class="space-y-1">
-                    <Label for="ai-skill-auto-enabled">{{ t("settings.aiSkillAutoEnabled") }}</Label>
-                    <p class="text-xs text-muted-foreground">{{ t("settings.aiSkillAutoEnabledDesc") }}</p>
-                  </div>
-                  <Switch id="ai-skill-auto-enabled" :model-value="settingsStore.desktopSettings.custom_ai_skill_auto_enabled === true" @update:model-value="(value) => settingsStore.updateDesktopSettings({ custom_ai_skill_auto_enabled: Boolean(value) })" />
-                </div>
-              </div>
-
-              <!-- Max Retries (list mode, global) -->
-              <div v-if="aiConfigListMode === 'list'" class="space-y-3">
-                <Separator />
-                <div>
-                  <h3 class="text-sm font-medium">
-                    {{ t("ai.maxRetriesGlobal") }}
-                  </h3>
-                  <p class="text-xs text-muted-foreground">
-                    {{ t("ai.maxRetriesGlobalDescription") }}
-                  </p>
-                </div>
-                <div class="flex items-center gap-2">
-                  <Input v-model.number="editMaxRetries" type="number" min="0" max="10" step="1" class="h-8 w-32 text-xs" placeholder="2" :disabled="!maxRetriesLoaded || maxRetriesSaving" />
-                  <span class="text-xs" :class="maxRetriesOutOfRange(editMaxRetries) ? 'text-destructive' : 'text-muted-foreground'">
-                    {{ t("ai.maxRetriesRange", { min: 0, max: 10, default: 2 }) }}
-                  </span>
-                  <div class="flex-1"></div>
-                  <Button v-if="maxRetriesLoadError" type="button" size="sm" variant="outline" :disabled="maxRetriesLoading" @click="loadMaxRetriesSetting">
-                    {{ t("common.retry") }}
-                  </Button>
-                  <Button type="button" size="sm" :disabled="!maxRetriesLoaded || maxRetriesSaving || maxRetriesOutOfRange(editMaxRetries)" @click="saveMaxRetriesSetting">
-                    {{ maxRetriesSaving ? t("common.processing") : t("common.save") }}
-                  </Button>
-                </div>
-              </div>
-
-              <!-- Global Custom Instructions (list mode) -->
-              <div v-if="aiConfigListMode === 'list'" class="space-y-3">
-                <Separator />
-                <div>
-                  <h3 class="text-sm font-medium">
-                    {{ t("ai.globalInstructions") }}
-                  </h3>
-                  <p class="text-xs text-muted-foreground">
-                    {{ t("ai.globalInstructionsDescription") }}
-                  </p>
-                </div>
-                <textarea v-model="editGlobalInstructions" class="w-full rounded-md border bg-background px-3 py-2 text-xs font-mono resize-y min-h-[80px]" rows="4" :placeholder="t('ai.globalInstructionsDescription')"></textarea>
-                <div class="flex items-center justify-between">
-                  <span class="text-xs" :class="globalInstructionsTooLong() ? 'text-destructive' : 'text-muted-foreground'">
-                    {{
-                      t("ai.globalInstructionsCharCount", {
-                        count: promptTemplateCharacterCount(editGlobalInstructions),
-                        max: GLOBAL_INSTRUCTIONS_MAX,
-                      })
-                    }}
-                  </span>
-                  <Button type="button" size="sm" :disabled="!promptTemplateStore.isLoaded || globalInstructionsTooLong() || globalInstructionsSaving" @click="saveGlobalInstructions">
-                    {{ globalInstructionsSaving ? t("common.processing") : t("ai.globalInstructionsSave") }}
-                  </Button>
-                </div>
-              </div>
-
-              <!-- Prompt Templates Management (list mode) -->
-              <div v-if="aiConfigListMode === 'list'" class="space-y-3">
-                <Separator />
-                <div class="flex items-center justify-between">
+                <!-- Agent Turn Limit (list mode, global) -->
+                <div v-if="aiConfigListMode === 'list'" class="space-y-3">
+                  <Separator />
                   <div>
                     <h3 class="text-sm font-medium">
-                      {{ t("ai.promptTemplates") }}
+                      {{ t("ai.maxAgentTurns") }}
                     </h3>
                     <p class="text-xs text-muted-foreground">
-                      {{ t("ai.promptTemplatesDescription") }}
+                      {{ t("ai.maxAgentTurnsDescription") }}
                     </p>
                   </div>
-                  <Button v-if="!templateFormOpen" type="button" size="sm" @click="openNewTemplate">
-                    <Plus class="mr-1 h-3.5 w-3.5" />
-                    {{ t("ai.promptTemplateNew") }}
-                  </Button>
-                </div>
-
-                <!-- Template list -->
-                <div v-if="!templateFormOpen && promptTemplateStore.templates.length > 0" class="space-y-1.5">
-                  <div v-for="tpl in promptTemplateStore.templates" :key="tpl.id" class="flex items-center justify-between rounded-md border p-3">
-                    <div class="min-w-0 flex-1">
-                      <div class="text-sm font-medium truncate">
-                        {{ tpl.name }}
-                      </div>
-                      <div class="text-xs text-muted-foreground truncate">{{ tpl.content.slice(0, 100) }}{{ tpl.content.length > 100 ? "..." : "" }}</div>
-                      <div v-if="defaultDbTypesForTemplate(tpl.id).length > 0" class="mt-1 flex flex-wrap gap-1">
-                        <Badge v-for="dbType in defaultDbTypesForTemplate(tpl.id)" :key="dbType" variant="secondary" class="px-1.5 py-0 text-[10px]">
-                          {{ dbTypeLabel(dbType) }}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div class="flex items-center gap-1 shrink-0 ml-2">
-                      <Popover :open="templateDefaultsOpenId === tpl.id" @update:open="(open) => (templateDefaultsOpenId = open ? tpl.id : '')">
-                        <PopoverTrigger as-child>
-                          <Button type="button" size="sm" variant="ghost" :class="defaultDbTypesForTemplate(tpl.id).length > 0 ? 'text-amber-500' : ''" :title="t('ai.templateSetDefault')" :aria-label="t('ai.templateSetDefault')">
-                            <Star class="h-3.5 w-3.5" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent align="end" class="w-60 p-2">
-                          <p class="mb-1 px-1 text-xs font-medium">{{ t("ai.templateDefaultsTitle") }}</p>
-                          <div class="max-h-48 overflow-auto">
-                            <button v-for="dbType in dbTypeOptions" :key="dbType" type="button" class="flex w-full items-center gap-2 rounded-sm px-1 py-1 text-xs hover:bg-muted" @click="toggleTemplateDefault(dbType, tpl.id)">
-                              <div class="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border" :class="templateHasDefault(dbType, tpl.id) ? 'border-primary bg-primary text-primary-foreground' : ''">
-                                <Check v-if="templateHasDefault(dbType, tpl.id)" class="h-3 w-3" />
-                              </div>
-                              {{ dbTypeLabel(dbType) }}
-                            </button>
-                          </div>
-                          <p v-if="defaultDbTypesForTemplate(tpl.id).length === 0" class="mt-1 px-1 text-[10px] text-muted-foreground">
-                            {{ t("ai.templateDefaultsEmpty") }}
-                          </p>
-                        </PopoverContent>
-                      </Popover>
-                      <Button type="button" size="sm" variant="ghost" @click="openEditTemplate(tpl)">{{ t("common.edit") }}</Button>
-                      <Button type="button" size="sm" variant="ghost" class="text-destructive" @click="templateDeleteConfirm = tpl">{{ t("common.delete") }}</Button>
-                    </div>
+                  <div class="flex items-center gap-2">
+                    <Input v-model.number="editMaxAgentTurns" type="number" :min="MAX_AGENT_TURNS_MIN" :max="MAX_AGENT_TURNS_MAX" step="1" class="h-8 w-32 text-xs" :placeholder="String(MAX_AGENT_TURNS_DEFAULT)" :disabled="!maxAgentTurnsLoaded || maxAgentTurnsSaving" />
+                    <span class="text-xs" :class="maxAgentTurnsOutOfRange(editMaxAgentTurns) ? 'text-destructive' : 'text-muted-foreground'">
+                      {{
+                        t("ai.maxAgentTurnsRange", {
+                          min: MAX_AGENT_TURNS_MIN,
+                          max: MAX_AGENT_TURNS_MAX,
+                          default: MAX_AGENT_TURNS_DEFAULT,
+                        })
+                      }}
+                    </span>
+                    <div class="flex-1"></div>
+                    <Button v-if="maxAgentTurnsLoadError" type="button" size="sm" variant="outline" :disabled="maxAgentTurnsLoading" @click="loadMaxAgentTurnsSetting">
+                      {{ t("common.retry") }}
+                    </Button>
+                    <Button type="button" size="sm" :disabled="!maxAgentTurnsLoaded || maxAgentTurnsSaving || maxAgentTurnsOutOfRange(editMaxAgentTurns)" @click="saveMaxAgentTurnsSetting">
+                      {{ maxAgentTurnsSaving ? t("common.processing") : t("common.save") }}
+                    </Button>
                   </div>
                 </div>
 
-                <div v-if="!templateFormOpen && promptTemplateStore.templates.length === 0" class="rounded-md border border-dashed p-6 text-center">
-                  <p class="text-sm text-muted-foreground">
-                    {{ t("ai.promptTemplateNoTemplates") }}
-                  </p>
+                <!-- Default AI Mode (list mode, global) -->
+                <div v-if="aiConfigListMode === 'list'" class="space-y-3">
+                  <Separator />
+                  <div>
+                    <h3 class="text-sm font-medium">
+                      {{ t("ai.defaultAiMode") }}
+                    </h3>
+                    <p class="text-xs text-muted-foreground">
+                      {{ t("ai.defaultAiModeDescription") }}
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-1 rounded-md border p-0.5">
+                      <button type="button" class="rounded-sm px-2.5 py-1 text-xs" :class="settingsStore.defaultAiMode === 'ask' ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'" @click="settingsStore.setDefaultAiMode('ask')">
+                        {{ t("ai.modes.ask") }}
+                      </button>
+                      <button type="button" class="rounded-sm px-2.5 py-1 text-xs" :class="settingsStore.defaultAiMode === 'agent' ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'" @click="settingsStore.setDefaultAiMode('agent')">
+                        {{ t("ai.modes.agent") }}
+                      </button>
+                    </div>
+                    <div class="flex-1"></div>
+                  </div>
                 </div>
 
-                <!-- Template Edit Form -->
-                <div v-if="templateFormOpen" class="rounded-md border p-4 space-y-3">
+                <!-- Default auto intent routing (list mode, global) -->
+                <div v-if="aiConfigListMode === 'list'" class="space-y-3">
+                  <Separator />
+                  <div class="settings-item flex items-center justify-between gap-4 rounded-md border bg-muted/20 px-3 py-2">
+                    <div class="space-y-1">
+                      <Label for="ai-default-auto-routing">
+                        {{ t("ai.defaultAutoRouting") }}
+                      </Label>
+                      <p class="text-xs text-muted-foreground">
+                        {{ t("ai.defaultAutoRoutingDescription") }}
+                      </p>
+                    </div>
+                    <Switch id="ai-default-auto-routing" :model-value="settingsStore.defaultAutoRouting" @update:model-value="(value) => settingsStore.setDefaultAutoRouting(Boolean(value))" />
+                  </div>
+                </div>
+
+                <!-- Restore last AI conversation (list mode, global) -->
+                <div v-if="aiConfigListMode === 'list'" class="space-y-3">
+                  <Separator />
+                  <div class="settings-item flex items-center justify-between gap-4 rounded-md border bg-muted/20 px-3 py-2">
+                    <div class="space-y-1">
+                      <Label for="ai-restore-last-conversation">
+                        {{ t("ai.restoreLastConversation") }}
+                      </Label>
+                      <p class="text-xs text-muted-foreground">
+                        {{ t("ai.restoreLastConversationDescription") }}
+                      </p>
+                    </div>
+                    <Switch id="ai-restore-last-conversation" :model-value="settingsStore.restoreLastConversation" @update:model-value="(value) => settingsStore.setRestoreLastConversation(Boolean(value))" />
+                  </div>
+                </div>
+
+                <!-- Custom skill directory (list mode, global, desktop-only) -->
+                <div v-if="aiConfigListMode === 'list' && !isWeb" class="space-y-3">
+                  <Separator />
+                  <div class="settings-item space-y-2 rounded-md border bg-muted/20 px-3 py-2">
+                    <div class="flex items-center justify-between gap-4">
+                      <div class="space-y-1">
+                        <Label for="ai-custom-skill-root">{{ t("settings.aiSkillRoot") }}</Label>
+                        <p class="text-xs text-muted-foreground">{{ t("settings.aiSkillRootDesc") }}</p>
+                      </div>
+                      <Switch id="ai-custom-skill-root" :model-value="settingsStore.desktopSettings.custom_ai_skill_root_enabled === true" @update:model-value="(value) => settingsStore.updateDesktopSettings({ custom_ai_skill_root_enabled: Boolean(value) })" />
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <Input v-model="customSkillRootDraft" :placeholder="t('settings.aiSkillRootPath')" :disabled="settingsStore.desktopSettings.custom_ai_skill_root_enabled !== true" class="h-8 flex-1 font-mono text-xs" @blur="commitCustomSkillRoot" @keydown.enter="commitCustomSkillRoot" />
+                      <Button variant="outline" size="sm" class="h-8 shrink-0 px-2" :disabled="settingsStore.desktopSettings.custom_ai_skill_root_enabled !== true" :aria-label="t('settings.aiSkillRootBrowse')" @click="pickCustomSkillRoot">
+                        <FolderOpen class="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                  <!-- Default off: a skill listing rides in every request once this is
+                     on, even with nothing selected (prd 09-30 Req 5). -->
+                  <div class="settings-item flex items-center justify-between gap-4 rounded-md border bg-muted/20 px-3 py-2">
+                    <div class="space-y-1">
+                      <Label for="ai-skill-auto-enabled">{{ t("settings.aiSkillAutoEnabled") }}</Label>
+                      <p class="text-xs text-muted-foreground">{{ t("settings.aiSkillAutoEnabledDesc") }}</p>
+                    </div>
+                    <Switch id="ai-skill-auto-enabled" :model-value="settingsStore.desktopSettings.custom_ai_skill_auto_enabled === true" @update:model-value="(value) => settingsStore.updateDesktopSettings({ custom_ai_skill_auto_enabled: Boolean(value) })" />
+                  </div>
+                </div>
+
+                <!-- Max Retries (list mode, global) -->
+                <div v-if="aiConfigListMode === 'list'" class="space-y-3">
+                  <Separator />
+                  <div>
+                    <h3 class="text-sm font-medium">
+                      {{ t("ai.maxRetriesGlobal") }}
+                    </h3>
+                    <p class="text-xs text-muted-foreground">
+                      {{ t("ai.maxRetriesGlobalDescription") }}
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Input v-model.number="editMaxRetries" type="number" min="0" max="10" step="1" class="h-8 w-32 text-xs" placeholder="2" :disabled="!maxRetriesLoaded || maxRetriesSaving" />
+                    <span class="text-xs" :class="maxRetriesOutOfRange(editMaxRetries) ? 'text-destructive' : 'text-muted-foreground'">
+                      {{ t("ai.maxRetriesRange", { min: 0, max: 10, default: 2 }) }}
+                    </span>
+                    <div class="flex-1"></div>
+                    <Button v-if="maxRetriesLoadError" type="button" size="sm" variant="outline" :disabled="maxRetriesLoading" @click="loadMaxRetriesSetting">
+                      {{ t("common.retry") }}
+                    </Button>
+                    <Button type="button" size="sm" :disabled="!maxRetriesLoaded || maxRetriesSaving || maxRetriesOutOfRange(editMaxRetries)" @click="saveMaxRetriesSetting">
+                      {{ maxRetriesSaving ? t("common.processing") : t("common.save") }}
+                    </Button>
+                  </div>
+                </div>
+
+                <!-- Global Custom Instructions (list mode) -->
+                <div v-if="aiConfigListMode === 'list'" class="space-y-3">
+                  <Separator />
+                  <div>
+                    <h3 class="text-sm font-medium">
+                      {{ t("ai.globalInstructions") }}
+                    </h3>
+                    <p class="text-xs text-muted-foreground">
+                      {{ t("ai.globalInstructionsDescription") }}
+                    </p>
+                  </div>
+                  <textarea v-model="editGlobalInstructions" class="w-full rounded-md border bg-background px-3 py-2 text-xs font-mono resize-y min-h-[80px]" rows="4" :placeholder="t('ai.globalInstructionsDescription')"></textarea>
                   <div class="flex items-center justify-between">
-                    <h4 class="text-sm font-medium">
-                      {{ templateFormIsNew ? t("ai.promptTemplateNew") : t("ai.promptTemplateEdit") }}
-                    </h4>
-                    <Button type="button" variant="ghost" size="sm" @click="closeTemplateForm">
-                      <X class="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  <div>
-                    <Label class="text-xs">{{ t("ai.promptTemplateName") }}</Label>
-                    <Input v-model="templateForm.name" class="mt-1 h-8 text-xs" :placeholder="t('ai.promptTemplateNamePlaceholder')" />
-                    <div class="flex justify-between mt-0.5">
-                      <p v-if="templateNameTooLong()" class="text-xs text-destructive">
-                        {{
-                          t("ai.promptTemplateNameTooLong", {
-                            max: PROMPT_TEMPLATE_NAME_MAX,
-                          })
-                        }}
-                      </p>
-                      <p v-else-if="localNameDuplicate()" class="text-xs text-destructive">
-                        {{
-                          t("ai.promptTemplateNameExists", {
-                            name: templateForm.name.trim(),
-                          })
-                        }}
-                      </p>
-                      <span v-else></span>
-                      <span class="text-xs" :class="templateNameTooLong() ? 'text-destructive' : 'text-muted-foreground'">{{ promptTemplateCharacterCount(templateForm.name) }}/{{ PROMPT_TEMPLATE_NAME_MAX }}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <Label class="text-xs">{{ t("ai.promptTemplateContent") }}</Label>
-                    <textarea v-model="templateForm.content" class="mt-1 w-full rounded-md border bg-background px-3 py-2 text-xs font-mono resize-y min-h-[80px]" rows="4" :placeholder="t('ai.promptTemplateContentPlaceholder')"></textarea>
-                    <div class="flex justify-between mt-0.5">
-                      <p v-if="templateContentTooLong()" class="text-xs text-destructive">
-                        {{
-                          t("ai.promptTemplateTooLong", {
-                            max: PROMPT_TEMPLATE_CONTENT_MAX,
-                          })
-                        }}
-                      </p>
-                      <span v-else></span>
-                      <span class="text-xs" :class="templateContentTooLong() ? 'text-destructive' : 'text-muted-foreground'">{{ promptTemplateCharacterCount(templateForm.content) }}/{{ PROMPT_TEMPLATE_CONTENT_MAX }}</span>
-                    </div>
-                  </div>
-                  <div class="flex justify-end gap-2">
-                    <Button type="button" variant="outline" size="sm" @click="closeTemplateForm">{{ t("common.cancel") }}</Button>
-                    <Button type="button" size="sm" :disabled="templateSaveDisabled()" @click="saveTemplateForm">
-                      {{ templateSaving ? t("common.processing") : t("common.save") }}
+                    <span class="text-xs" :class="globalInstructionsTooLong() ? 'text-destructive' : 'text-muted-foreground'">
+                      {{
+                        t("ai.globalInstructionsCharCount", {
+                          count: promptTemplateCharacterCount(editGlobalInstructions),
+                          max: GLOBAL_INSTRUCTIONS_MAX,
+                        })
+                      }}
+                    </span>
+                    <Button type="button" size="sm" :disabled="!promptTemplateStore.isLoaded || globalInstructionsTooLong() || globalInstructionsSaving" @click="saveGlobalInstructions">
+                      {{ globalInstructionsSaving ? t("common.processing") : t("ai.globalInstructionsSave") }}
                     </Button>
                   </div>
                 </div>
-              </div>
 
-              <!-- Config Edit View -->
-              <div v-else class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <Button type="button" variant="ghost" size="sm" class="settings-ai-back-button" @click="aiEnterListMode()">
-                    <ArrowLeft class="mr-1 h-3.5 w-3.5" />
-                    {{ t("common.back") }}
-                  </Button>
-                  <h3 class="text-sm font-medium">
-                    {{ aiEditConfigId ? t("ai.editConfig") : t("ai.addConfig") }}
-                  </h3>
-                </div>
+                <!-- Prompt Templates Management (list mode) -->
+                <div v-if="aiConfigListMode === 'list'" class="space-y-3">
+                  <Separator />
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h3 class="text-sm font-medium">
+                        {{ t("ai.promptTemplates") }}
+                      </h3>
+                      <p class="text-xs text-muted-foreground">
+                        {{ t("ai.promptTemplatesDescription") }}
+                      </p>
+                    </div>
+                    <Button v-if="!templateFormOpen" type="button" size="sm" @click="openNewTemplate">
+                      <Plus class="mr-1 h-3.5 w-3.5" />
+                      {{ t("ai.promptTemplateNew") }}
+                    </Button>
+                  </div>
 
-                <!-- Config Name Input -->
-                <div class="grid grid-cols-3 items-center gap-3">
-                  <Label class="text-right text-xs">{{ t("ai.configName") }}</Label>
-                  <Input v-model="aiEditConfigName" class="col-span-2 h-8 text-xs" :placeholder="t('ai.configNamePlaceholder')" />
-                </div>
-
-                <!-- Provider Selection -->
-                <div class="grid grid-cols-3 items-start gap-3">
-                  <Label class="text-right text-xs">{{ t("ai.provider") }}</Label>
-                  <div class="col-span-2 space-y-2">
-                    <Select :model-value="aiEditProviderPresetId" @update:model-value="(v: any) => aiSelectProvider(String(v))">
-                      <SelectTrigger inputClass="h-8 text-xs">
-                        <SelectValue>
-                          <span class="flex items-center gap-2">
-                            <AiProviderLogo :provider="selectedAiProviderPreset.provider" :label="selectedAiProviderPreset.label" :icon-slug="selectedAiProviderPreset.iconSlug" :icon-path="selectedAiProviderPreset.iconPath" />
-                            <span>{{ selectedAiProviderPreset.label }}</span>
-                          </span>
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent class="w-[32rem] max-w-[calc(100vw-2rem)]">
-                        <div class="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                          <SelectGroup class="min-w-0">
-                            <SelectLabel>{{ t("ai.builtinProviders") }}</SelectLabel>
-                            <SelectItem v-for="provider in builtinAiProviderOptions" :key="provider.provider" :value="provider.provider">
-                              <span class="flex w-full min-w-0 items-center gap-2">
-                                <AiProviderLogo :provider="provider.provider" :label="provider.label" :icon-slug="provider.iconSlug" :icon-path="provider.iconPath" />
-                                <span class="truncate">{{ provider.label }}</span>
-                              </span>
-                            </SelectItem>
-                          </SelectGroup>
-                          <SelectGroup v-if="partnerAiProviderOptions.length" class="min-w-0 border-border/60 sm:border-l">
-                            <SelectLabel>{{ t("ai.partnerProviders") }}</SelectLabel>
-                            <SelectItem v-for="provider in partnerAiProviderOptions" :key="provider.id" :value="provider.id">
-                              <span class="flex w-full min-w-0 items-center gap-2">
-                                <AiProviderLogo :provider="provider.provider" :label="provider.label" :icon-slug="provider.iconSlug" :icon-path="provider.iconPath" />
-                                <span class="min-w-0 flex-1 truncate">{{ provider.label }}</span>
-                                <Badge v-if="provider.badgeKey" variant="outline" class="h-5 shrink-0 px-1.5 text-[10px] font-normal">{{ t(provider.badgeKey) }}</Badge>
-                              </span>
-                            </SelectItem>
-                          </SelectGroup>
+                  <!-- Template list -->
+                  <div v-if="!templateFormOpen && promptTemplateStore.templates.length > 0" class="space-y-1.5">
+                    <div v-for="tpl in promptTemplateStore.templates" :key="tpl.id" class="flex items-center justify-between rounded-md border p-3">
+                      <div class="min-w-0 flex-1">
+                        <div class="text-sm font-medium truncate">
+                          {{ tpl.name }}
                         </div>
+                        <div class="text-xs text-muted-foreground truncate">{{ tpl.content.slice(0, 100) }}{{ tpl.content.length > 100 ? "..." : "" }}</div>
+                        <div v-if="defaultDbTypesForTemplate(tpl.id).length > 0" class="mt-1 flex flex-wrap gap-1">
+                          <Badge v-for="dbType in defaultDbTypesForTemplate(tpl.id)" :key="dbType" variant="secondary" class="px-1.5 py-0 text-[10px]">
+                            {{ dbTypeLabel(dbType) }}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-1 shrink-0 ml-2">
+                        <Popover :open="templateDefaultsOpenId === tpl.id" @update:open="(open) => (templateDefaultsOpenId = open ? tpl.id : '')">
+                          <PopoverTrigger as-child>
+                            <Button type="button" size="sm" variant="ghost" :class="defaultDbTypesForTemplate(tpl.id).length > 0 ? 'text-amber-500' : ''" :title="t('ai.templateSetDefault')" :aria-label="t('ai.templateSetDefault')">
+                              <Star class="h-3.5 w-3.5" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="end" class="w-60 p-2">
+                            <p class="mb-1 px-1 text-xs font-medium">{{ t("ai.templateDefaultsTitle") }}</p>
+                            <div class="max-h-48 overflow-auto">
+                              <button v-for="dbType in dbTypeOptions" :key="dbType" type="button" class="flex w-full items-center gap-2 rounded-sm px-1 py-1 text-xs hover:bg-muted" @click="toggleTemplateDefault(dbType, tpl.id)">
+                                <div class="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border" :class="templateHasDefault(dbType, tpl.id) ? 'border-primary bg-primary text-primary-foreground' : ''">
+                                  <Check v-if="templateHasDefault(dbType, tpl.id)" class="h-3 w-3" />
+                                </div>
+                                {{ dbTypeLabel(dbType) }}
+                              </button>
+                            </div>
+                            <p v-if="defaultDbTypesForTemplate(tpl.id).length === 0" class="mt-1 px-1 text-[10px] text-muted-foreground">
+                              {{ t("ai.templateDefaultsEmpty") }}
+                            </p>
+                          </PopoverContent>
+                        </Popover>
+                        <Button type="button" size="sm" variant="ghost" @click="openEditTemplate(tpl)">{{ t("common.edit") }}</Button>
+                        <Button type="button" size="sm" variant="ghost" class="text-destructive" @click="templateDeleteConfirm = tpl">{{ t("common.delete") }}</Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-if="!templateFormOpen && promptTemplateStore.templates.length === 0" class="rounded-md border border-dashed p-6 text-center">
+                    <p class="text-sm text-muted-foreground">
+                      {{ t("ai.promptTemplateNoTemplates") }}
+                    </p>
+                  </div>
+
+                  <!-- Template Edit Form -->
+                  <div v-if="templateFormOpen" class="rounded-md border p-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                      <h4 class="text-sm font-medium">
+                        {{ templateFormIsNew ? t("ai.promptTemplateNew") : t("ai.promptTemplateEdit") }}
+                      </h4>
+                      <Button type="button" variant="ghost" size="sm" @click="closeTemplateForm">
+                        <X class="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div>
+                      <Label class="text-xs">{{ t("ai.promptTemplateName") }}</Label>
+                      <Input v-model="templateForm.name" class="mt-1 h-8 text-xs" :placeholder="t('ai.promptTemplateNamePlaceholder')" />
+                      <div class="flex justify-between mt-0.5">
+                        <p v-if="templateNameTooLong()" class="text-xs text-destructive">
+                          {{
+                            t("ai.promptTemplateNameTooLong", {
+                              max: PROMPT_TEMPLATE_NAME_MAX,
+                            })
+                          }}
+                        </p>
+                        <p v-else-if="localNameDuplicate()" class="text-xs text-destructive">
+                          {{
+                            t("ai.promptTemplateNameExists", {
+                              name: templateForm.name.trim(),
+                            })
+                          }}
+                        </p>
+                        <span v-else></span>
+                        <span class="text-xs" :class="templateNameTooLong() ? 'text-destructive' : 'text-muted-foreground'">{{ promptTemplateCharacterCount(templateForm.name) }}/{{ PROMPT_TEMPLATE_NAME_MAX }}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <Label class="text-xs">{{ t("ai.promptTemplateContent") }}</Label>
+                      <textarea v-model="templateForm.content" class="mt-1 w-full rounded-md border bg-background px-3 py-2 text-xs font-mono resize-y min-h-[80px]" rows="4" :placeholder="t('ai.promptTemplateContentPlaceholder')"></textarea>
+                      <div class="flex justify-between mt-0.5">
+                        <p v-if="templateContentTooLong()" class="text-xs text-destructive">
+                          {{
+                            t("ai.promptTemplateTooLong", {
+                              max: PROMPT_TEMPLATE_CONTENT_MAX,
+                            })
+                          }}
+                        </p>
+                        <span v-else></span>
+                        <span class="text-xs" :class="templateContentTooLong() ? 'text-destructive' : 'text-muted-foreground'">{{ promptTemplateCharacterCount(templateForm.content) }}/{{ PROMPT_TEMPLATE_CONTENT_MAX }}</span>
+                      </div>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                      <Button type="button" variant="outline" size="sm" @click="closeTemplateForm">{{ t("common.cancel") }}</Button>
+                      <Button type="button" size="sm" :disabled="templateSaveDisabled()" @click="saveTemplateForm">
+                        {{ templateSaving ? t("common.processing") : t("common.save") }}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Config Edit View -->
+                <div v-else class="space-y-4">
+                  <div class="flex items-center justify-between">
+                    <Button type="button" variant="ghost" size="sm" class="settings-ai-back-button" @click="aiEnterListMode()">
+                      <ArrowLeft class="mr-1 h-3.5 w-3.5" />
+                      {{ t("common.back") }}
+                    </Button>
+                    <h3 class="text-sm font-medium">
+                      {{ aiEditConfigId ? t("ai.editConfig") : t("ai.addConfig") }}
+                    </h3>
+                  </div>
+
+                  <!-- Config Name Input -->
+                  <div class="grid grid-cols-3 items-center gap-3">
+                    <Label class="text-right text-xs">{{ t("ai.configName") }}</Label>
+                    <Input v-model="aiEditConfigName" class="col-span-2 h-8 text-xs" :placeholder="t('ai.configNamePlaceholder')" />
+                  </div>
+
+                  <!-- Provider Selection -->
+                  <div class="grid grid-cols-3 items-start gap-3">
+                    <Label class="text-right text-xs">{{ t("ai.provider") }}</Label>
+                    <div class="col-span-2 space-y-2">
+                      <Select :model-value="aiEditProviderPresetId" @update:model-value="(v: any) => aiSelectProvider(String(v))">
+                        <SelectTrigger inputClass="h-8 text-xs">
+                          <SelectValue>
+                            <span class="flex items-center gap-2">
+                              <AiProviderLogo :provider="selectedAiProviderPreset.provider" :label="selectedAiProviderPreset.label" :icon-slug="selectedAiProviderPreset.iconSlug" :icon-path="selectedAiProviderPreset.iconPath" />
+                              <span>{{ selectedAiProviderPreset.label }}</span>
+                            </span>
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent class="w-[32rem] max-w-[calc(100vw-2rem)]">
+                          <div class="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                            <SelectGroup class="min-w-0">
+                              <SelectLabel>{{ t("ai.builtinProviders") }}</SelectLabel>
+                              <SelectItem v-for="provider in builtinAiProviderOptions" :key="provider.provider" :value="provider.provider">
+                                <span class="flex w-full min-w-0 items-center gap-2">
+                                  <AiProviderLogo :provider="provider.provider" :label="provider.label" :icon-slug="provider.iconSlug" :icon-path="provider.iconPath" />
+                                  <span class="truncate">{{ provider.label }}</span>
+                                </span>
+                              </SelectItem>
+                            </SelectGroup>
+                            <SelectGroup v-if="partnerAiProviderOptions.length" class="min-w-0 border-border/60 sm:border-l">
+                              <SelectLabel>{{ t("ai.partnerProviders") }}</SelectLabel>
+                              <SelectItem v-for="provider in partnerAiProviderOptions" :key="provider.id" :value="provider.id">
+                                <span class="flex w-full min-w-0 items-center gap-2">
+                                  <AiProviderLogo :provider="provider.provider" :label="provider.label" :icon-slug="provider.iconSlug" :icon-path="provider.iconPath" />
+                                  <span class="min-w-0 flex-1 truncate">{{ provider.label }}</span>
+                                  <Badge v-if="provider.badgeKey" variant="outline" class="h-5 shrink-0 px-1.5 text-[10px] font-normal">{{ t(provider.badgeKey) }}</Badge>
+                                </span>
+                              </SelectItem>
+                            </SelectGroup>
+                          </div>
+                        </SelectContent>
+                      </Select>
+                      <div v-if="selectedAiPartnerPreset" class="flex items-center gap-3 rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+                        <div class="min-w-0 flex-1">
+                          <p class="whitespace-pre-line text-[11px] leading-4 text-muted-foreground">{{ t(selectedAiPartnerPreset.descriptionKey) }}</p>
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" class="h-7 w-7 shrink-0" :title="t('ai.visitPartner')" :aria-label="t('ai.visitPartner')" @click="openExternalUrl(selectedAiPartnerPreset.websiteUrl)">
+                          <ExternalLink class="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- CLI MCP Status -->
+                  <div v-if="aiIsCliProvider && !isWeb" class="rounded-md border px-3 py-2.5 text-xs" :class="aiCliMcpNeedsInstall ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300'">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div class="min-w-0 space-y-1">
+                        <div class="flex min-w-0 items-center gap-2 font-medium">
+                          <Loader2 v-if="mcpStatusLoading" class="h-3.5 w-3.5 shrink-0 animate-spin" />
+                          <AlertTriangle v-else-if="aiCliMcpNeedsInstall || mcpStatus?.error || mcpStatusError" class="h-3.5 w-3.5 shrink-0" />
+                          <CheckCircle2 v-else class="h-3.5 w-3.5 shrink-0" />
+                          <span>{{ t("ai.cliMcpRequiredTitle") }}</span>
+                          <Badge variant="outline" class="h-5 shrink-0 rounded-md border-current/30 px-1.5 text-[11px] font-normal">
+                            {{ mcpStatusLabel }}
+                          </Badge>
+                        </div>
+                        <p class="leading-relaxed">
+                          {{
+                            t("ai.cliMcpRequiredDescription", {
+                              provider: aiCliProviderLabel,
+                            })
+                          }}
+                        </p>
+                        <p v-if="mcpStatus?.error || mcpStatusError" class="select-text leading-relaxed">
+                          {{ mcpStatusError || mcpStatus?.error }}
+                        </p>
+                      </div>
+                      <div class="flex shrink-0 items-center gap-2">
+                        <Button type="button" size="sm" variant="outline" class="h-7 bg-background/80 px-2 text-xs" :disabled="mcpStatusLoading" @click="refreshMcpStatus">
+                          <Loader2 v-if="mcpStatusLoading" class="mr-1 h-3 w-3 animate-spin" />
+                          <RefreshCw v-else class="mr-1 h-3 w-3" />
+                          {{ t("settings.mcpRefresh") }}
+                        </Button>
+                        <Button v-if="aiCliMcpNeedsInstall || mcpStatus?.update_available" type="button" size="sm" class="h-7 px-2 text-xs" :disabled="!aiCliMcpCanInstall" @click="installMcp">
+                          <Loader2 v-if="mcpInstalling" class="mr-1 h-3 w-3 animate-spin" />
+                          {{ mcpInstalling ? t("settings.mcpInstalling") : aiCliMcpActionLabel }}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Authentication -->
+                  <div v-if="!aiIsCliProvider && aiSupportsAuthMethod" class="grid grid-cols-3 items-center gap-3">
+                    <Label class="text-right text-xs">Authentication</Label>
+                    <Select v-model="aiEditAuthMethod">
+                      <SelectTrigger class="col-span-2" inputClass="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="api-key">API Key</SelectItem>
+                        <SelectItem value="bearer">Auth Token</SelectItem>
                       </SelectContent>
                     </Select>
-                    <div v-if="selectedAiPartnerPreset" class="flex items-center gap-3 rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
-                      <div class="min-w-0 flex-1">
-                        <p class="whitespace-pre-line text-[11px] leading-4 text-muted-foreground">{{ t(selectedAiPartnerPreset.descriptionKey) }}</p>
-                      </div>
-                      <Button type="button" variant="ghost" size="icon" class="h-7 w-7 shrink-0" :title="t('ai.visitPartner')" :aria-label="t('ai.visitPartner')" @click="openExternalUrl(selectedAiPartnerPreset.websiteUrl)">
+                  </div>
+
+                  <!-- API Key -->
+                  <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-center gap-3">
+                    <Label class="text-right text-xs">{{ aiCredentialLabel }}</Label>
+                    <div class="col-span-2 flex min-w-0 items-center gap-2">
+                      <PasswordInput v-model="aiEditApiKey" autocomplete="off" class="min-w-0 flex-1" inputClass="h-8 text-xs" :placeholder="aiCredentialPlaceholder" />
+                      <Button v-if="selectedAiPartnerPreset" type="button" variant="outline" size="sm" class="h-8 shrink-0 gap-1.5 px-3 text-xs" :title="t('ai.getApiKey')" :aria-label="t('ai.getApiKey')" @click="openExternalUrl(selectedAiPartnerPreset.apiKeyUrl)">
+                        {{ t("ai.getApiKey") }}
                         <ExternalLink class="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
-                </div>
 
-                <!-- CLI MCP Status -->
-                <div v-if="aiIsCliProvider && !isWeb" class="rounded-md border px-3 py-2.5 text-xs" :class="aiCliMcpNeedsInstall ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300'">
-                  <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div class="min-w-0 space-y-1">
-                      <div class="flex min-w-0 items-center gap-2 font-medium">
-                        <Loader2 v-if="mcpStatusLoading" class="h-3.5 w-3.5 shrink-0 animate-spin" />
-                        <AlertTriangle v-else-if="aiCliMcpNeedsInstall || mcpStatus?.error || mcpStatusError" class="h-3.5 w-3.5 shrink-0" />
-                        <CheckCircle2 v-else class="h-3.5 w-3.5 shrink-0" />
-                        <span>{{ t("ai.cliMcpRequiredTitle") }}</span>
-                        <Badge variant="outline" class="h-5 shrink-0 rounded-md border-current/30 px-1.5 text-[11px] font-normal">
-                          {{ mcpStatusLabel }}
-                        </Badge>
+                  <!-- Endpoint -->
+                  <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-start gap-3">
+                    <Label class="pt-2 text-right text-xs">Endpoint</Label>
+                    <div class="col-span-2 space-y-1.5">
+                      <Input v-model="aiEditEndpoint" :placeholder="aiEndpointPlaceholder" autocomplete="off" class="h-8 text-xs" />
+                      <p v-if="aiEndpointHint" class="text-[11px] text-muted-foreground">
+                        {{ aiEndpointHint }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Custom HTTP headers for API gateways and tenant routing. -->
+                  <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-start gap-3">
+                    <Label class="pt-2 text-right text-xs">{{ t("ai.customHeaders") }}</Label>
+                    <div class="col-span-2 space-y-2">
+                      <div class="space-y-1.5">
+                        <div v-for="row in aiEditCustomHeaderRows" :key="row.id" class="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)_2rem] gap-2">
+                          <Input v-model="row.name" autocomplete="off" class="h-8 font-mono text-xs" :placeholder="t('ai.customHeadersNamePlaceholder')" />
+                          <PasswordInput v-model="row.value" autocomplete="off" class="min-w-0" inputClass="h-8 font-mono text-xs" :placeholder="t('ai.customHeadersValuePlaceholder')" />
+                          <Button type="button" variant="ghost" size="icon" class="h-8 w-8" :title="t('common.remove')" :aria-label="t('common.remove')" @click="removeAiCustomHeaderRow(row.id)">
+                            <X class="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
-                      <p class="leading-relaxed">
+                      <Button type="button" variant="outline" size="sm" class="h-7 px-2 text-xs" @click="addAiCustomHeaderRow">
+                        <Plus class="mr-1 h-3.5 w-3.5" />
+                        {{ t("ai.customHeadersAdd") }}
+                      </Button>
+                      <p v-if="aiHeadersValidationError" class="text-[11px] text-destructive">{{ aiHeadersValidationError }}</p>
+                      <p v-else class="text-[11px] text-muted-foreground">{{ t("ai.customHeadersHint") }}</p>
+                    </div>
+                  </div>
+
+                  <!-- CLI Path -->
+                  <div v-if="aiIsCliProvider" class="grid grid-cols-3 items-start gap-3">
+                    <Label class="pt-2 text-right text-xs">{{ t("ai.cliPath", { provider: aiCliProviderLabel }) }}</Label>
+                    <div class="col-span-2 space-y-1.5">
+                      <Input v-model="aiEditCliPath" autocomplete="off" class="h-8 text-xs" :placeholder="aiCliCommandName" />
+                      <p class="text-[11px] text-muted-foreground">
                         {{
-                          t("ai.cliMcpRequiredDescription", {
-                            provider: aiCliProviderLabel,
+                          t("ai.cliPathHint", {
+                            command: aiCliCommandName,
+                            loginCommand: aiCliLoginCommand,
                           })
                         }}
                       </p>
-                      <p v-if="mcpStatus?.error || mcpStatusError" class="select-text leading-relaxed">
-                        {{ mcpStatusError || mcpStatus?.error }}
+                      <p v-if="aiCliPathError" class="text-[11px] text-destructive">
+                        {{ aiCliPathError }}
                       </p>
                     </div>
-                    <div class="flex shrink-0 items-center gap-2">
-                      <Button type="button" size="sm" variant="outline" class="h-7 bg-background/80 px-2 text-xs" :disabled="mcpStatusLoading" @click="refreshMcpStatus">
-                        <Loader2 v-if="mcpStatusLoading" class="mr-1 h-3 w-3 animate-spin" />
-                        <RefreshCw v-else class="mr-1 h-3 w-3" />
-                        {{ t("settings.mcpRefresh") }}
-                      </Button>
-                      <Button v-if="aiCliMcpNeedsInstall || mcpStatus?.update_available" type="button" size="sm" class="h-7 px-2 text-xs" :disabled="!aiCliMcpCanInstall" @click="installMcp">
-                        <Loader2 v-if="mcpInstalling" class="mr-1 h-3 w-3 animate-spin" />
-                        {{ mcpInstalling ? t("settings.mcpInstalling") : aiCliMcpActionLabel }}
-                      </Button>
-                    </div>
                   </div>
-                </div>
 
-                <!-- Authentication -->
-                <div v-if="!aiIsCliProvider && aiSupportsAuthMethod" class="grid grid-cols-3 items-center gap-3">
-                  <Label class="text-right text-xs">Authentication</Label>
-                  <Select v-model="aiEditAuthMethod">
-                    <SelectTrigger class="col-span-2" inputClass="h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="api-key">API Key</SelectItem>
-                      <SelectItem value="bearer">Auth Token</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <!-- API Key -->
-                <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-center gap-3">
-                  <Label class="text-right text-xs">{{ aiCredentialLabel }}</Label>
-                  <div class="col-span-2 flex min-w-0 items-center gap-2">
-                    <PasswordInput v-model="aiEditApiKey" autocomplete="off" class="min-w-0 flex-1" inputClass="h-8 text-xs" :placeholder="aiCredentialPlaceholder" />
-                    <Button v-if="selectedAiPartnerPreset" type="button" variant="outline" size="sm" class="h-8 shrink-0 gap-1.5 px-3 text-xs" :title="t('ai.getApiKey')" :aria-label="t('ai.getApiKey')" @click="openExternalUrl(selectedAiPartnerPreset.apiKeyUrl)">
-                      {{ t("ai.getApiKey") }}
-                      <ExternalLink class="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-
-                <!-- Endpoint -->
-                <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-start gap-3">
-                  <Label class="pt-2 text-right text-xs">Endpoint</Label>
-                  <div class="col-span-2 space-y-1.5">
-                    <Input v-model="aiEditEndpoint" :placeholder="aiEndpointPlaceholder" autocomplete="off" class="h-8 text-xs" />
-                    <p v-if="aiEndpointHint" class="text-[11px] text-muted-foreground">
-                      {{ aiEndpointHint }}
-                    </p>
-                  </div>
-                </div>
-
-                <!-- Custom HTTP headers for API gateways and tenant routing. -->
-                <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-start gap-3">
-                  <Label class="pt-2 text-right text-xs">{{ t("ai.customHeaders") }}</Label>
-                  <div class="col-span-2 space-y-2">
-                    <div class="space-y-1.5">
-                      <div v-for="row in aiEditCustomHeaderRows" :key="row.id" class="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)_2rem] gap-2">
-                        <Input v-model="row.name" autocomplete="off" class="h-8 font-mono text-xs" :placeholder="t('ai.customHeadersNamePlaceholder')" />
-                        <PasswordInput v-model="row.value" autocomplete="off" class="min-w-0" inputClass="h-8 font-mono text-xs" :placeholder="t('ai.customHeadersValuePlaceholder')" />
-                        <Button type="button" variant="ghost" size="icon" class="h-8 w-8" :title="t('common.remove')" :aria-label="t('common.remove')" @click="removeAiCustomHeaderRow(row.id)">
-                          <X class="h-3.5 w-3.5" />
-                        </Button>
+                  <!-- CLI Env -->
+                  <div v-if="aiIsCliProvider" class="grid grid-cols-3 items-start gap-3">
+                    <Label class="pt-2 text-right text-xs">{{ t("ai.cliEnv") }}</Label>
+                    <div class="col-span-2 space-y-2">
+                      <div class="space-y-1.5">
+                        <div v-for="row in aiEditCliEnvRows" :key="row.id" class="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)_2rem] gap-2">
+                          <Input v-model="row.key" autocomplete="off" class="h-8 font-mono text-xs" :placeholder="t('ai.cliEnvKeyPlaceholder')" />
+                          <Input v-model="row.value" autocomplete="off" class="h-8 font-mono text-xs" :placeholder="t('ai.cliEnvValuePlaceholder')" />
+                          <Button type="button" variant="ghost" size="icon" class="h-8 w-8" :title="t('common.remove')" :aria-label="t('common.remove')" @click="removeCliEnvRow(row.id)">
+                            <X class="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
+                      <Button type="button" variant="outline" size="sm" class="h-7 px-2 text-xs" @click="addCliEnvRow">
+                        <Plus class="mr-1 h-3.5 w-3.5" />
+                        {{ t("ai.cliEnvAdd") }}
+                      </Button>
+                      <p v-if="aiCliEnvError" class="text-[11px] text-destructive">
+                        {{ aiCliEnvError }}
+                      </p>
+                      <p v-else class="text-[11px] text-muted-foreground">
+                        {{ t("ai.cliEnvHint", { provider: aiCliProviderLabel }) }}
+                      </p>
                     </div>
-                    <Button type="button" variant="outline" size="sm" class="h-7 px-2 text-xs" @click="addAiCustomHeaderRow">
-                      <Plus class="mr-1 h-3.5 w-3.5" />
-                      {{ t("ai.customHeadersAdd") }}
-                    </Button>
-                    <p v-if="aiHeadersValidationError" class="text-[11px] text-destructive">{{ aiHeadersValidationError }}</p>
-                    <p v-else class="text-[11px] text-muted-foreground">{{ t("ai.customHeadersHint") }}</p>
                   </div>
-                </div>
 
-                <!-- CLI Path -->
-                <div v-if="aiIsCliProvider" class="grid grid-cols-3 items-start gap-3">
-                  <Label class="pt-2 text-right text-xs">{{ t("ai.cliPath", { provider: aiCliProviderLabel }) }}</Label>
-                  <div class="col-span-2 space-y-1.5">
-                    <Input v-model="aiEditCliPath" autocomplete="off" class="h-8 text-xs" :placeholder="aiCliCommandName" />
-                    <p class="text-[11px] text-muted-foreground">
-                      {{
-                        t("ai.cliPathHint", {
-                          command: aiCliCommandName,
-                          loginCommand: aiCliLoginCommand,
-                        })
-                      }}
-                    </p>
-                    <p v-if="aiCliPathError" class="text-[11px] text-destructive">
-                      {{ aiCliPathError }}
-                    </p>
-                  </div>
-                </div>
-
-                <!-- CLI Env -->
-                <div v-if="aiIsCliProvider" class="grid grid-cols-3 items-start gap-3">
-                  <Label class="pt-2 text-right text-xs">{{ t("ai.cliEnv") }}</Label>
-                  <div class="col-span-2 space-y-2">
-                    <div class="space-y-1.5">
-                      <div v-for="row in aiEditCliEnvRows" :key="row.id" class="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)_2rem] gap-2">
-                        <Input v-model="row.key" autocomplete="off" class="h-8 font-mono text-xs" :placeholder="t('ai.cliEnvKeyPlaceholder')" />
-                        <Input v-model="row.value" autocomplete="off" class="h-8 font-mono text-xs" :placeholder="t('ai.cliEnvValuePlaceholder')" />
-                        <Button type="button" variant="ghost" size="icon" class="h-8 w-8" :title="t('common.remove')" :aria-label="t('common.remove')" @click="removeCliEnvRow(row.id)">
-                          <X class="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                  <!-- API Style -->
+                  <div v-if="aiSupportsApiStyle" class="grid grid-cols-3 items-center gap-3">
+                    <Label class="text-right text-xs">API</Label>
+                    <div class="col-span-2 flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        class="h-8 flex-1 text-xs"
+                        :class="{
+                          'dbx-choice-selected': aiEditApiStyle === 'completions',
+                        }"
+                        @click="aiSelectApiStyle('completions')"
+                        >/chat/completions</Button
+                      >
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        class="h-8 flex-1 text-xs"
+                        :class="{
+                          'dbx-choice-selected': aiEditApiStyle === 'responses',
+                        }"
+                        @click="aiSelectApiStyle('responses')"
+                        >/responses</Button
+                      >
+                      <Button
+                        v-if="aiSupportsAnthropicApiStyle"
+                        size="sm"
+                        variant="outline"
+                        class="h-8 flex-1 text-xs"
+                        :class="{
+                          'dbx-choice-selected': aiEditApiStyle === 'anthropic-messages',
+                        }"
+                        @click="aiSelectApiStyle('anthropic-messages')"
+                        >/messages</Button
+                      >
                     </div>
-                    <Button type="button" variant="outline" size="sm" class="h-7 px-2 text-xs" @click="addCliEnvRow">
-                      <Plus class="mr-1 h-3.5 w-3.5" />
-                      {{ t("ai.cliEnvAdd") }}
-                    </Button>
-                    <p v-if="aiCliEnvError" class="text-[11px] text-destructive">
-                      {{ aiCliEnvError }}
-                    </p>
-                    <p v-else class="text-[11px] text-muted-foreground">
-                      {{ t("ai.cliEnvHint", { provider: aiCliProviderLabel }) }}
-                    </p>
                   </div>
-                </div>
 
-                <!-- API Style -->
-                <div v-if="aiSupportsApiStyle" class="grid grid-cols-3 items-center gap-3">
-                  <Label class="text-right text-xs">API</Label>
-                  <div class="col-span-2 flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      class="h-8 flex-1 text-xs"
-                      :class="{
-                        'dbx-choice-selected': aiEditApiStyle === 'completions',
-                      }"
-                      @click="aiSelectApiStyle('completions')"
-                      >/chat/completions</Button
-                    >
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      class="h-8 flex-1 text-xs"
-                      :class="{
-                        'dbx-choice-selected': aiEditApiStyle === 'responses',
-                      }"
-                      @click="aiSelectApiStyle('responses')"
-                      >/responses</Button
-                    >
-                    <Button
-                      v-if="aiSupportsAnthropicApiStyle"
-                      size="sm"
-                      variant="outline"
-                      class="h-8 flex-1 text-xs"
-                      :class="{
-                        'dbx-choice-selected': aiEditApiStyle === 'anthropic-messages',
-                      }"
-                      @click="aiSelectApiStyle('anthropic-messages')"
-                      >/messages</Button
-                    >
+                  <!-- Default Model -->
+                  <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-center gap-3">
+                    <Label class="text-right text-xs">{{ t("ai.defaultModel") }}</Label>
+                    <Input v-model="aiEditModel" autocomplete="off" class="col-span-2 h-8 text-xs" :placeholder="t('ai.manualModelPlaceholder')" />
                   </div>
-                </div>
 
-                <!-- Default Model -->
-                <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-center gap-3">
-                  <Label class="text-right text-xs">{{ t("ai.defaultModel") }}</Label>
-                  <Input v-model="aiEditModel" autocomplete="off" class="col-span-2 h-8 text-xs" :placeholder="t('ai.manualModelPlaceholder')" />
-                </div>
-
-                <!-- Context Window -->
-                <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-start gap-3">
-                  <Label class="text-right text-xs">{{ t("ai.contextWindow") }}</Label>
-                  <div class="col-span-2">
-                    <Input v-model.number="aiEditContextWindow" type="number" min="1000" step="1000" class="h-8 text-xs" :placeholder="t('ai.contextWindowAuto')" />
-                    <p class="mt-1 text-xs text-muted-foreground">
-                      {{ t("ai.contextWindowHint") }}
-                    </p>
+                  <!-- Context Window -->
+                  <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-start gap-3">
+                    <Label class="text-right text-xs">{{ t("ai.contextWindow") }}</Label>
+                    <div class="col-span-2">
+                      <Input v-model.number="aiEditContextWindow" type="number" min="1000" step="1000" class="h-8 text-xs" :placeholder="t('ai.contextWindowAuto')" />
+                      <p class="mt-1 text-xs text-muted-foreground">
+                        {{ t("ai.contextWindowHint") }}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <!-- Maximum Output Tokens -->
-                <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-start gap-3">
-                  <Label class="text-right text-xs">{{ t("ai.maxOutputTokens") }}</Label>
-                  <div class="col-span-2">
-                    <Input v-model.number="aiEditMaxOutputTokens" type="number" :min="AI_OUTPUT_TOKENS_MIN" :max="AI_OUTPUT_TOKENS_MAX" step="1000" class="h-8 text-xs" :placeholder="t('ai.maxOutputTokensAuto')" />
-                    <p class="mt-1 text-xs text-muted-foreground">
-                      {{ t("ai.maxOutputTokensHint", { min: AI_OUTPUT_TOKENS_MIN, max: AI_OUTPUT_TOKENS_MAX }) }}
-                    </p>
+                  <!-- Maximum Output Tokens -->
+                  <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-start gap-3">
+                    <Label class="text-right text-xs">{{ t("ai.maxOutputTokens") }}</Label>
+                    <div class="col-span-2">
+                      <Input v-model.number="aiEditMaxOutputTokens" type="number" :min="AI_OUTPUT_TOKENS_MIN" :max="AI_OUTPUT_TOKENS_MAX" step="1000" class="h-8 text-xs" :placeholder="t('ai.maxOutputTokensAuto')" />
+                      <p class="mt-1 text-xs text-muted-foreground">
+                        {{ t("ai.maxOutputTokensHint", { min: AI_OUTPUT_TOKENS_MIN, max: AI_OUTPUT_TOKENS_MAX }) }}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <!-- Proxy -->
-                <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-center gap-3">
-                  <Label class="text-right text-xs">{{ t("ai.proxy") }}</Label>
-                  <label class="col-span-2 flex items-center gap-2 text-xs text-muted-foreground">
-                    <input v-model="aiEditProxyEnabled" type="checkbox" class="h-4 w-4 shrink-0 accent-primary" />
-                    {{ t("ai.proxyEnable") }}
-                  </label>
-                </div>
-
-                <!-- Proxy URL -->
-                <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-center gap-3">
-                  <Label class="text-right text-xs">{{ t("ai.proxyUrl") }}</Label>
-                  <Input v-model="aiEditProxyUrl" autocomplete="off" class="col-span-2" inputClass="h-8 text-xs" placeholder="socks5://127.0.0.1:7890" :disabled="!aiEditProxyEnabled" />
-                </div>
-
-                <!-- Skip TLS Verify -->
-                <div v-if="aiSupportsSkipTlsVerify" class="grid grid-cols-3 items-start gap-3">
-                  <Label class="text-right text-xs">{{ t("ai.sslVerification") }}</Label>
-                  <div class="col-span-2">
-                    <label class="flex items-center gap-2 text-xs text-muted-foreground">
-                      <input v-model="aiEditSkipTlsVerify" type="checkbox" class="h-4 w-4 shrink-0 accent-primary" />
-                      {{ t("ai.skipTlsVerify") }}
+                  <!-- Proxy -->
+                  <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-center gap-3">
+                    <Label class="text-right text-xs">{{ t("ai.proxy") }}</Label>
+                    <label class="col-span-2 flex items-center gap-2 text-xs text-muted-foreground">
+                      <input v-model="aiEditProxyEnabled" type="checkbox" class="h-4 w-4 shrink-0 accent-primary" />
+                      {{ t("ai.proxyEnable") }}
                     </label>
-                    <p class="mt-1 text-xs text-muted-foreground">{{ t("ai.skipTlsVerifyHint") }}</p>
+                  </div>
+
+                  <!-- Proxy URL -->
+                  <div v-if="!aiIsCliProvider" class="grid grid-cols-3 items-center gap-3">
+                    <Label class="text-right text-xs">{{ t("ai.proxyUrl") }}</Label>
+                    <Input v-model="aiEditProxyUrl" autocomplete="off" class="col-span-2" inputClass="h-8 text-xs" placeholder="socks5://127.0.0.1:7890" :disabled="!aiEditProxyEnabled" />
+                  </div>
+
+                  <!-- Skip TLS Verify -->
+                  <div v-if="aiSupportsSkipTlsVerify" class="grid grid-cols-3 items-start gap-3">
+                    <Label class="text-right text-xs">{{ t("ai.sslVerification") }}</Label>
+                    <div class="col-span-2">
+                      <label class="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input v-model="aiEditSkipTlsVerify" type="checkbox" class="h-4 w-4 shrink-0 accent-primary" />
+                        {{ t("ai.skipTlsVerify") }}
+                      </label>
+                      <p class="mt-1 text-xs text-muted-foreground">{{ t("ai.skipTlsVerifyHint") }}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </template>
+              <Button v-if="settingsStore.enterpriseAiLoadFailed" variant="outline" size="sm" @click="settingsStore.reloadAiConfigs().catch(() => {})">{{ t("common.retry") }}</Button>
             </section>
 
             <section v-else-if="activeSettingsTab === 'mcp'" data-settings-search-id="mcp" :class="['flex flex-col gap-5 py-2', settingsSearchTargetClass('mcp')]">

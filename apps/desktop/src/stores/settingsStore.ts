@@ -2224,6 +2224,11 @@ export const useSettingsStore = defineStore("settings", () => {
   const aiLastUsedTemplatesByDbType = ref<Record<string, string[]>>({});
   const isAiConfigLoaded = ref(false);
   const aiConfigs = ref<AiConfigItem[]>([]);
+  const enterpriseAiState = ref<import("@/types/ai").EnterpriseAiState | null>(null);
+  const aiPolicyReady = ref(false);
+  const enterpriseAiLoadFailed = ref(false);
+  const isEnterpriseAi = computed(() => enterpriseAiState.value !== null);
+
   const desktopSettings = ref<DesktopSettings>({ ...DEFAULT_DESKTOP_SETTINGS });
   const mcpGlobalPolicy = ref<McpGlobalPolicy>({
     ...DEFAULT_MCP_GLOBAL_POLICY,
@@ -2445,23 +2450,57 @@ export const useSettingsStore = defineStore("settings", () => {
   async function initAiConfigs(): Promise<void> {
     if (isAiConfigLoaded.value) return;
     if (!initAiConfigsPromise) {
-      initAiConfigsPromise = loadAiConfigurationState().finally(() => {
-        initAiConfigsPromise = null;
-      });
+      initAiConfigsPromise = loadAiConfigurationState()
+        .catch((error) => {
+          enterpriseAiLoadFailed.value = true;
+          throw error;
+        })
+        .finally(() => {
+          initAiConfigsPromise = null;
+        });
     }
     await initAiConfigsPromise;
   }
 
   async function loadAiConfigurationState(): Promise<void> {
+    aiPolicyReady.value = false;
+    enterpriseAiLoadFailed.value = false;
+    // A failed metadata read must not expose the editable community settings.
+    try {
+      enterpriseAiState.value = await api.getEnterpriseAiState();
+      aiPolicyReady.value = true;
+    } catch (error) {
+      enterpriseAiLoadFailed.value = true;
+      aiConfigs.value = [];
+      activeModel.value = null;
+      throw error;
+    }
+
     // 尝试加载新格式
-    const newConfigs = await api.loadAiConfigs();
+    const enterprise = enterpriseAiState.value;
+    const newConfigs: AiConfigItem[] = enterprise
+      ? [
+          {
+            id: "__enterprise_ai__",
+            name: enterprise.serviceName,
+            isDefault: true,
+            provider: "openai-compatible",
+            apiKey: "",
+            authMethod: "bearer",
+            apiStyle: "completions",
+            endpoint: enterprise.endpoint,
+            model: enterprise.selectedModel,
+            models: enterprise.models.map((name) => ({ name })),
+          },
+        ]
+      : await api.loadAiConfigs();
 
     if (newConfigs.length > 0) {
       aiConfigs.value = newConfigs.map(normalizeAiConfigItem);
     } else {
       // 迁移旧格式
       aiConfigs.value = [];
-      await migrateToMultiConfig();
+      if (!enterpriseAiState.value) await migrateToMultiConfig();
     }
 
     const savedSelection = await api.loadAiChatSelection().catch(() => null);
@@ -2485,7 +2524,23 @@ export const useSettingsStore = defineStore("settings", () => {
       if (activeModel.value) persistAiChatSelection();
     }
 
+    if (enterpriseAiState.value) {
+      activeModel.value = { configId: "__enterprise_ai__", modelId: enterpriseAiState.value.selectedModel };
+      effortPreferences.value = [];
+    }
+    aiPolicyReady.value = true;
     isAiConfigLoaded.value = true;
+  }
+
+  async function saveEnterpriseKey(key: string): Promise<void> {
+    await api.saveEnterpriseAiKey(key);
+    await reloadAiConfigs();
+  }
+
+  async function saveEnterpriseModel(model: string): Promise<void> {
+    await api.saveEnterpriseAiModel(model);
+    if (enterpriseAiState.value) enterpriseAiState.value.selectedModel = model;
+    activeModel.value = { configId: "__enterprise_ai__", modelId: model };
   }
 
   async function reloadAiConfigs(): Promise<void> {
@@ -2530,6 +2585,7 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   async function createAiConfig(config: AiConfigItem): Promise<void> {
+    if (isEnterpriseAi.value) throw new Error("ENTERPRISE_AI_CONFIG_LOCKED");
     const normalized = normalizeAiConfigItem(config);
     await api.saveAiConfigItem(normalized);
     aiConfigs.value.push(normalized);
@@ -2543,6 +2599,7 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   async function updateAiConfigItem(id: string, config: Partial<AiConfigItem>): Promise<void> {
+    if (isEnterpriseAi.value) throw new Error("ENTERPRISE_AI_CONFIG_LOCKED");
     const index = aiConfigs.value.findIndex((c) => c.id === id);
     if (index !== -1) {
       const previous = aiConfigs.value[index];
@@ -2558,6 +2615,7 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   async function deleteAiConfig(id: string): Promise<void> {
+    if (isEnterpriseAi.value) throw new Error("ENTERPRISE_AI_CONFIG_LOCKED");
     await api.deleteAiConfig(id);
     aiConfigs.value = aiConfigs.value.filter((c) => c.id !== id);
     effortPreferences.value = effortPreferences.value.filter((preference) => preference.configId !== id);
@@ -2569,6 +2627,7 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   async function setDefaultAiConfig(id: string): Promise<void> {
+    if (isEnterpriseAi.value) throw new Error("ENTERPRISE_AI_CONFIG_LOCKED");
     await api.setDefaultAiConfig(id);
     aiConfigs.value.forEach((c) => {
       c.isDefault = c.id === id;
@@ -2576,6 +2635,13 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   function updateActiveModel(model: { configId: string; modelId: string }) {
+    if (enterpriseAiState.value) {
+      if (model.configId !== "__enterprise_ai__" || !enterpriseAiState.value.models.includes(model.modelId)) return;
+      void saveEnterpriseModel(model.modelId).catch(() => {
+        enterpriseAiLoadFailed.value = true;
+      });
+      return;
+    }
     activeModel.value = {
       configId: model.configId,
       modelId: model.modelId.trim(),
@@ -2707,6 +2773,8 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   const isConfigured = computed((): boolean => {
+    if (!aiPolicyReady.value || enterpriseAiLoadFailed.value) return false;
+    if (enterpriseAiState.value) return enterpriseAiState.value.hasApiKey && activeModel.value?.configId === "__enterprise_ai__" && enterpriseAiState.value.models.includes(activeModel.value.modelId);
     if (!activeModel.value) return false;
     const config = aiConfigs.value.find((c) => c.id === activeModel.value!.configId);
     if (!config) return false;
@@ -3197,6 +3265,12 @@ export const useSettingsStore = defineStore("settings", () => {
     removeTemplateFromDefaultAndLastUsed,
     isAiConfigLoaded,
     aiConfigs,
+    enterpriseAiState,
+    aiPolicyReady,
+    enterpriseAiLoadFailed,
+    isEnterpriseAi,
+    saveEnterpriseKey,
+    saveEnterpriseModel,
     initAiConfigs,
     reloadAiConfigs,
     migrateToMultiConfig,

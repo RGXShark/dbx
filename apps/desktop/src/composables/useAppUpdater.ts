@@ -223,6 +223,18 @@ export function useAppUpdater(options: UseAppUpdaterOptions = {}) {
     return t("updates.installFailed", { error: message });
   }
   async function checkUpdates(checkOptions: { silent?: boolean } = {}) {
+    let enterprisePolicy;
+    try {
+      enterprisePolicy = await api.getEnterpriseAiState();
+    } catch {
+      updateCheckMessage.value = t("enterpriseAi.loadFailed");
+      return;
+    }
+    if (enterprisePolicy) {
+      updateCheckMessage.value = t("enterpriseAi.managedUpdates");
+      if (!checkOptions.silent) showUpdateDialog.value = true;
+      return;
+    }
     if (disposed || isIgnoringUpdate.value) return;
     if (!checkOptions.silent) showUpdateDialog.value = true;
     // A downloaded-but-uninstalled update keeps the app in the ready phase; checks

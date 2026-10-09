@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "serviceName": "公司 AI 服务",
+  "endpoint": "https://ai.company.internal/v1",
+  "models": [
+    "model-a",
+    "model-b"
+  ],
+  "defaultModel": "model-a"
+}

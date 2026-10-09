@@ -1,6 +1,11 @@
 mod background_backup;
 mod commands;
 mod data_dir;
+mod enterprise_ai;
+#[cfg(test)]
+#[path = "../enterprise_ai_build.rs"]
+mod enterprise_ai_build;
+mod enterprise_ai_schema;
 pub use background_backup::run_if_requested as run_backup_worker_if_requested;
 mod db;
 #[cfg(target_os = "macos")]
@@ -1538,10 +1543,14 @@ pub fn run() {
         builder
     };
 
+    let builder = if crate::enterprise_ai::policy().is_some() {
+        builder
+    } else {
+        builder.plugin(tauri_plugin_updater::Builder::new().build())
+    };
     let builder = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(
             tauri_plugin_window_state::Builder::default()
@@ -1854,6 +1863,9 @@ pub fn run() {
             }
         })
         .invoke_handler(migration_gate::guard_handler(route_external_commands(tauri::generate_handler![
+            commands::ai::get_enterprise_ai_state,
+            commands::ai::save_enterprise_ai_key,
+            commands::ai::save_enterprise_ai_model,
             commands::ai::ai_complete,
             commands::ai::ai_stream,
             commands::ai::ai_agent_stream,

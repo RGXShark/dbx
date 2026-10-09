@@ -398,6 +398,7 @@ mod tests {
 
     fn config(model: &str) -> AiConfig {
         AiConfig {
+            deny_redirects: false,
             provider: AiProvider::CursorCli,
             api_key: String::new(),
             auth_method: AiAuthMethod::Bearer,

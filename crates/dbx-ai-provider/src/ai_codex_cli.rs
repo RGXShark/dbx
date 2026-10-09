@@ -1107,6 +1107,7 @@ mod tests {
 
     fn codex_config(model: &str) -> AiConfig {
         AiConfig {
+            deny_redirects: false,
             provider: AiProvider::CodexCli,
             api_key: String::new(),
             auth_method: AiAuthMethod::Bearer,

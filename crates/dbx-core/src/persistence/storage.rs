@@ -13620,6 +13620,7 @@ mod tests {
             name: name.to_string(),
             is_default,
             config: AiConfig {
+                deny_redirects: false,
                 provider: AiProvider::Openai,
                 api_key: "sk-test".to_string(),
                 auth_method: AiAuthMethod::ApiKey,

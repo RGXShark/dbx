@@ -778,6 +778,7 @@ mod tests {
 
     fn base_config() -> AiConfig {
         AiConfig {
+            deny_redirects: false,
             provider: AiProvider::GrokCli,
             api_key: String::new(),
             auth_method: AiAuthMethod::Bearer,

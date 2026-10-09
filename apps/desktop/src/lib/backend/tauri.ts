@@ -6495,3 +6495,13 @@ export * from "@/lib/backend/nacos-tauri";
 export async function openQueryResultTempFile(path: string): Promise<void> {
   return invoke("open_query_result_temp_file", { path });
 }
+
+export async function getEnterpriseAiState(): Promise<import("@/types/ai").EnterpriseAiState | null> {
+  return invoke("get_enterprise_ai_state");
+}
+export async function saveEnterpriseAiKey(apiKey: string): Promise<void> {
+  return invoke("save_enterprise_ai_key", { apiKey });
+}
+export async function saveEnterpriseAiModel(model: string): Promise<void> {
+  return invoke("save_enterprise_ai_model", { model });
+}
